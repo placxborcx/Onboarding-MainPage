@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart City Analytics - Main Functions</title>
+    <link rel="stylesheet" href="styles/main.css">
+    <link rel="stylesheet" href="styles/components.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="navbar">
+            <div class="nav-brand">
+                <div class="logo">
+                    <span class="logo-icon">🅿️</span>
+                    <span class="logo-text">Smart City Analytics</span>
+                </div>
+            </div>
+            <div class="nav-menu">
+                <a href="#parking" class="nav-link active">Parking Search</a>
+                <a href="#analytics" class="nav-link">Population Analytics</a>
+                <a href="#about" class="nav-link">About</a>
+            </div>
+        </nav>
+    </header>
+
+<!-- Main Content -->
+<main class="main-container">
+    <div class="container">
+        <!-- Page Title -->
+        <div class="page-header">
+            <h1 class="page-title">Smart City Analytics</h1>
+            <p class="page-subtitle">Parking search and Melbourne population insights</p>
+        </div>
+
+        <!-- Function Tabs -->
+        <div class="function-tabs">
+            <button class="tab-button active" data-tab="parking">
+                <span class="tab-icon">📍</span>
+                Nearby Search
+            </button>
+            <button class="tab-button" data-tab="analytics">
+                <span class="tab-icon">📊</span>
+                Melbourne Population Analysis
+            </button>
+        </div>
+
+        <!-- Function 1: Parking Search -->
+        <div class="function-panel active" id="parking-panel">
+            <div class="search-section">
+                <div class="search-header">
+                    <h2>Find Parking Near You</h2>
+                    <p>Search for available parking spaces in your area</p>
+                </div>
+                
+                <div class="search-form">
+                    <div class="input-group">
+                        <input 
+                            type="text" 
+                            id="location-input" 
+                            placeholder="Enter Australian city or suburb (e.g., Clayton, Melbourne)"
+                            class="location-input"
+                        >
+                        <button type="button" id="find-parking-btn" class="find-btn">
+                            Find Parking
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div class="loading-state hidden" id="loading">
+                    <div class="spinner"></div>
+                    <p>Searching for available parking spaces...</p>
+                </div>
+
+                <!-- Results Section -->
+                <div class="results-section hidden" id="results-section">
+                    <h3>Available Parking Spaces</h3>
+                    <div class="parking-list" id="parking-list">
+                        <!-- Results will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- No Results -->
+                <div class="no-results hidden" id="no-results">
+                    <div class="no-results-icon">🚫</div>
+                    <h3>No Available Parking Found</h3>
+                    <p>Sorry, no parking spaces are currently available in your search area.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Function 2: Population Analytics -->
+        <div class="function-panel" id="analytics-panel">
+            <div class="analytics-section">
+                <div class="analytics-header">
+                    <div class="header-content">
+                        <div class="header-icon">👥</div>
+                        <div class="header-text">
+                            <h2>Melbourne CBD Population Analysis (2011-2021)</h2>
+                            <p>Interactive visualization of population growth across Melbourne's Statistical Areas Level 4 (SA4)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filter Controls -->
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <label for="from-year">From Year</label>
+                        <select id="from-year" class="filter-select">
+                            <option value="2011">2011</option>
+                            <option value="2012">2012</option>
+                            <option value="2013">2013</option>
+                            <option value="2014">2014</option>
+                            <option value="2015">2015</option>
+                            <option value="2016">2016</option>
+                            <option value="2017">2017</option>
+                            <option value="2018">2018</option>
+                            <option value="2019">2019</option>
+                            <option value="2020">2020</option>
+                            <option value="2021">2021</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="to-year">To Year</label>
+                        <select id="to-year" class="filter-select">
+                            <option value="2011">2011</option>
+                            <option value="2012">2012</option>
+                            <option value="2013">2013</option>
+                            <option value="2014">2014</option>
+                            <option value="2015">2015</option>
+                            <option value="2016" selected>2016</option>
+                            <option value="2017">2017</option>
+                            <option value="2018">2018</option>
+                            <option value="2019">2019</option>
+                            <option value="2020">2020</option>
+                            <option value="2021">2021</option>
+                        </select>
+                    </div>
+                    <button type="button" id="apply-filters-btn" class="apply-btn">
+                        Apply Filters
+                    </button>
+                    <button type="button" id="reset-filters-btn" class="reset-btn">
+                        Reset Filters
+                    </button>
+                </div>
+
+                <div class="filter-info">
+                    <p>Filtered: <span id="filter-range">2011 - 2016</span></p>
+                </div>
+
+                <!-- Charts Container -->
+                <div class="charts-container">
+                    <!-- Bar Chart -->
+                    <div class="chart-section">
+                        <h3>Estimated Resident Population by SA4 Areas</h3>
+                        <p>Population distribution across Melbourne's Statistical Areas Level 4 (SA4)</p>
+                        <div class="chart-wrapper">
+                            <canvas id="population-bar-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Line Chart -->
+                    <div class="chart-section">
+                        <h3>Overall Population Growth Trend</h3>
+                        <p>Percentage change in total Melbourne population year-over-year</p>
+                        <div class="chart-wrapper">
+                            <canvas id="population-line-chart"></canvas>
+                        </div>
+                        
+                        <!-- Stats Cards -->
+                        <div class="stats-cards">
+                            <div class="stat-card">
+                                <div class="stat-icon">👥</div>
+                                <div class="stat-content">
+                                    <div class="stat-label">Total Population (2021)</div>
+                                    <div class="stat-value" id="total-population">4,026,100</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon">📈</div>
+                                <div class="stat-content">
+                                    <div class="stat-label">Avg. Annual Growth</div>
+                                    <div class="stat-value growth" id="avg-growth">2.3%</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon">📊</div>
+                                <div class="stat-content">
+                                    <div class="stat-label">Years Analyzed</div>
+                                    <div class="stat-value" id="years-analyzed">6</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="logo-icon">🅿️</span>
+                    <span class="logo-text">Smart City Analytics</span>
+                </div>
+                <p>&copy; 2025 Smart City Analytics. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="js/main.js"></script>
+    <script src="js/parking-search.js"></script>
+    <script src="js/population-analytics.js"></script>
+</body>
+</html>
+
+
+
+
+
+<script>
+
+
+
+
