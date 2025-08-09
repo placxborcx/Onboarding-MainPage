@@ -1,51 +1,65 @@
-// ===== js/main.js =====
 
-// Global variables
-let charts = {};
-let currentData = null;
-
-// DOM Elements
+/** Cache DOM nodes */
 const tabButtons = document.querySelectorAll('.tab-button');
 const functionPanels = document.querySelectorAll('.function-panel');
 
-// Initialize application
-document.addEventListener('DOMContentLoaded', function() {
-    initializeTabs();
-    initializeParkingSearch();
-    initializePopulationAnalytics();
+/** Boot */
+document.addEventListener('DOMContentLoaded', () => {
+  initializeTabs();
+  initializeNavbarTabs();
+  initializeParkingSearch();        // from parking-search.js
+  initializePopulationAnalytics();  // from population-analytics.js (data + filter wiring)
 });
 
-// Tab functionality
+/** Setup lower tab buttons */
 function initializeTabs() {
-    tabButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const targetTab = this.getAttribute('data-tab');
-            switchTab(targetTab);
-        });
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const targetTab = button.getAttribute('data-tab');
+      switchTab(targetTab);
+
+      // reflect active on navbar
+      document.querySelectorAll('.nav-link').forEach(l => {
+        l.classList.toggle('active', l.getAttribute('data-tab') === targetTab);
+      });
     });
+  });
 }
 
+/** Setup navbar links to switch tabs */
+function initializeNavbarTabs() {
+  document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetTab = link.getAttribute('data-tab');
+      switchTab(targetTab);
+
+      // set navbar active
+      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+
+      // set lower tab button active
+      tabButtons.forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-tab') === targetTab);
+      });
+    });
+  });
+}
+
+/** Core tab switcher */
 function switchTab(targetTab) {
-    // Update active tab button
-    tabButtons.forEach(button => {
-        button.classList.remove('active');
-        if (button.getAttribute('data-tab') === targetTab) {
-            button.classList.add('active');
-        }
-    });
-    
-    // Update active panel
-    functionPanels.forEach(panel => {
-        panel.classList.remove('active');
-        if (panel.id === targetTab + '-panel') {
-            panel.classList.add('active');
-        }
-    });
-    
-    // Initialize charts if switching to analytics tab
-    if (targetTab === 'analytics' && !charts.barChart) {
-        setTimeout(() => {
-            initializeCharts();
-        }, 100);
-    }
+  // buttons active state
+  tabButtons.forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === targetTab);
+  });
+
+  // panels active state
+  functionPanels.forEach(panel => {
+    panel.classList.toggle('active', panel.id === `${targetTab}-panel`);
+  });
+
+  // ensure analytics charts are initialized when switching in
+  if (targetTab === 'analytics' && window.PopulationAnalytics) {
+    window.PopulationAnalytics.ensureInitialized();
+  }
 }

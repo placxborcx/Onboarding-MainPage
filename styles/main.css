@@ -179,13 +179,8 @@ body {
 }
 
 /* Function Panels */
-.function-panel {
-    display: none;
-}
-
-.function-panel.active {
-    display: block;
-}
+.function-panel { display: none; }
+.function-panel.active { display: block; }
 
 /* Utility Classes */
 .hidden {
