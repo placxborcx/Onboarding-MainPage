@@ -47,29 +47,17 @@ function initializeParkingSearch() {
       noResults.classList.add('hidden');
     }
   
-    // Mock API
-    async function searchParkingSpaces(location) {
-      await new Promise(r => setTimeout(r, 1200)); // simulate latency
-  
-      const mockData = {
-        'clayton': [
-          { name: 'City Center Parking', availableSpaces: 45, totalSpaces: 200, address: '123 Main St, Clayton', distance: '0.2 km', price: '$3.50/hour', coordinates: { lat: -37.9249, lng: 145.1340 } },
-          { name: 'Shopping Mall Garage', availableSpaces: 12, totalSpaces: 150, address: '456 Royalty Street, Clayton', distance: '0.5 km', price: '$2.00/hour', coordinates: { lat: -37.9260, lng: 145.1350 } },
-          { name: 'Metro Station Parking', availableSpaces: 8, totalSpaces: 80, address: '789 Transit Way, Clayton', distance: '0.7 km', price: '$4.00/hour', coordinates: { lat: -37.9270, lng: 145.1360 } },
-          { name: 'University Parking Lot', availableSpaces: 23, totalSpaces: 120, address: '321 Campus Drive, Clayton', distance: '1.1 km', price: '$5.00/hour', coordinates: { lat: -37.9280, lng: 145.1370 } }
-        ],
-        'melbourne': [
-          { name: 'Collins Street Parking', availableSpaces: 32, totalSpaces: 180, address: '100 Collins Street, Melbourne', distance: '0.1 km', price: '$8.00/hour', coordinates: { lat: -37.8136, lng: 144.9631 } },
-          { name: 'Federation Square Garage', availableSpaces: 15, totalSpaces: 250, address: '200 Flinders Street, Melbourne', distance: '0.3 km', price: '$6.50/hour', coordinates: { lat: -37.8182, lng: 144.9696 } }
-        ]
-      };
-  
-      const normalized = location.toLowerCase().trim();
-      for (const [key, data] of Object.entries(mockData)) {
-        if (normalized.includes(key)) return data;
-      }
-      return [];
-    }
+    // REAL API
+const API_BASE = "https://xbtfcqbgeh.execute-api.ap-southeast-2.amazonaws.com";
+
+async function searchParkingSpaces(location) {
+  const url = `${API_BASE}/parking-api?location=${encodeURIComponent(location)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data.results) ? data.results : [];
+}
+
   
     function displayParkingResults(parkingData) {
       parkingList.innerHTML = '';
