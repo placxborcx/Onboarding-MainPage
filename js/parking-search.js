@@ -48,10 +48,11 @@ function initializeParkingSearch() {
     }
   
     // REAL API
-const API_BASE = "https://xbtfcqbgeh.execute-api.ap-southeast-2.amazonaws.com";
+const API_BASE = "https://xbtfcqbgeh.execute-api.ap-southeast-2.amazonaws.com/api";
+const PATH = "/parking/search";
 
 async function searchParkingSpaces(location) {
-  const url = `${API_BASE}/parking-api?location=${encodeURIComponent(location)}`;
+  const url = `${API_BASE}${PATH}?location=${encodeURIComponent(location)}`;
   console.log("[parking] GET", url);
   const res = await fetch(url, {
     method: "GET",
