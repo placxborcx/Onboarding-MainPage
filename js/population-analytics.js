@@ -1,3 +1,278 @@
+// Population Analytics (Chart.js) — CBD East/North/West only via JSON
+(function () {
+  const charts = { trend: null, growth: null, density: null };
+  let raw = null;
+  let initialized = false;
+  let selectedRegions = new Set();
+
+  window.PopulationAnalytics = { ensureInitialized };
+
+  window.initializePopulationAnalytics = function () {
+    const applyBtn = document.getElementById('apply-filters-btn');
+    const resetBtn = document.getElementById('reset-filters-btn');
+    const regionSelect = document.getElementById('region-select');
+    const selectAllBtn = document.getElementById('select-all-regions');
+    const clearBtn = document.getElementById('clear-regions');
+
+    applyBtn?.addEventListener('click', () => {
+      const { fromYear, toYear } = getYearRange();
+      if (fromYear > toYear) return alert('From Year cannot be later than To Year');
+      updateFilterInfo(fromYear, toYear);
+      updateAll(buildFiltered(raw, fromYear, toYear, [...selectedRegions]));
+    });
+
+    resetBtn?.addEventListener('click', () => {
+      const defaults = { from: 2011, to: 2021 };
+      setYearRange(defaults.from, defaults.to);
+      updateFilterInfo(defaults.from, defaults.to);
+      selectedRegions = new Set(Object.keys(raw?.regions || {}));
+      syncRegionSelect(regionSelect, selectedRegions);
+      updateAll(buildFiltered(raw, defaults.from, defaults.to, [...selectedRegions]));
+    });
+
+    regionSelect?.addEventListener('change', () => {
+      selectedRegions = new Set([...regionSelect.options].filter(o => o.selected).map(o => o.value));
+    });
+
+    selectAllBtn?.addEventListener('click', () => {
+      selectedRegions = new Set(Object.keys(raw?.regions || {}));
+      syncRegionSelect(regionSelect, selectedRegions);
+    });
+
+    clearBtn?.addEventListener('click', () => {
+      selectedRegions.clear();
+      syncRegionSelect(regionSelect, selectedRegions);
+    });
+
+    // Load data
+    loadJSON('/data/population_sa4.json')
+      .then(data => {
+        raw = data;
+        populateRegionSelect(regionSelect, Object.keys(raw.regions));
+        selectedRegions = new Set(Object.keys(raw.regions)); // default: all
+      })
+      .catch(err => console.error('Failed to load population_sa4.json', err));
+  };
+
+  function ensureInitialized() {
+    if (initialized || !raw) return;
+    const { fromYear, toYear } = getYearRange();
+    updateFilterInfo(fromYear, toYear);
+    const filtered = buildFiltered(raw, fromYear, toYear, [...selectedRegions]);
+    initAll(filtered);
+    initialized = true;
+  }
+
+  // -------- data/io ----------
+  async function loadJSON(path) {
+    const res = await fetch(path, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+
+  // -------- ui helpers ----------
+  function populateRegionSelect(selectEl, regions) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    regions.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r; opt.textContent = r; opt.selected = true;
+      selectEl.appendChild(opt);
+    });
+  }
+  function syncRegionSelect(selectEl, selected) {
+    if (!selectEl) return;
+    [...selectEl.options].forEach(o => { o.selected = selected.has(o.value); });
+  }
+
+  // -------- filters ----------
+  function getYearRange() {
+    const fromYear = parseInt(document.getElementById('from-year').value, 10);
+    const toYear   = parseInt(document.getElementById('to-year').value, 10);
+    return { fromYear, toYear };
+  }
+  function setYearRange(from, to) {
+    document.getElementById('from-year').value = String(from);
+    document.getElementById('to-year').value   = String(to);
+  }
+  function updateFilterInfo(from, to) {
+    const span = document.getElementById('filter-range');
+    if (span) span.textContent = `${from} - ${to}`;
+  }
+
+  // -------- derivations ----------
+  function buildFiltered(rawData, fromYear, toYear, chosen) {
+    if (!rawData) return null;
+
+    const s = rawData.years.indexOf(fromYear);
+    const e = rawData.years.indexOf(toYear);
+    const valid = (s !== -1 && e !== -1 && s <= e);
+    const labels = valid ? rawData.years.slice(s, e + 1) : rawData.years.slice();
+
+    const regions = chosen.length ? chosen : Object.keys(rawData.regions);
+    const palette = ['#6366f1','#10b981','#f59e0b'];
+
+    // Trend datasets
+    const trendDatasets = regions.map((name, i) => {
+      const arr = rawData.regions[name].population;
+      return {
+        label: name,
+        data: valid ? arr.slice(s, e + 1) : arr.slice(),
+        borderColor: palette[i % palette.length],
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        tension: 0.35,
+        pointRadius: 2
+      };
+    });
+
+    // Growth % per region (first vs last value within selected range)
+    const growthData = regions.map(name => {
+      const series = rawData.regions[name].population;
+      const sub = valid ? series.slice(s, e + 1) : series.slice();
+      const first = sub[0], last = sub[sub.length - 1];
+      const pct = first ? ((last - first) / first) * 100 : 0;
+      return { name, pct: +pct.toFixed(1) };
+    }).sort((a,b) => b.pct - a.pct);
+
+    // Density 2021 for selected regions
+    const density = regions.map(name => ({
+      name, value: rawData.regions[name].density_2021 ?? 0
+    })).sort((a,b) => b.value - a.value);
+
+    // Stats (sum of selected regions, latest year in range)
+    const totals = labels.map((_, idx) =>
+      regions.reduce((sum, r) => {
+        const series = rawData.regions[r].population;
+        const baseIndex = valid ? s + idx : idx;
+        return sum + (series[baseIndex] ?? 0);
+      }, 0)
+    );
+    const totalPopulation = totals[totals.length - 1] || 0;
+    const yoy = computeYoYPercent(totals);
+    const avgGrowthRate = yoy.length ? +(yoy.slice(1).reduce((a,b)=>a+b,0) / (yoy.length - 1)).toFixed(1) : 0;
+
+    return {
+      labels,
+      trendDatasets,
+      growthData,
+      density,
+      stats: { totalPopulation, avgGrowthRate, yearsAnalyzed: labels.length }
+    };
+  }
+
+  function computeYoYPercent(series) {
+    const out = [0];
+    for (let i = 1; i < series.length; i++) {
+      const p = series[i-1] || 0, c = series[i] || 0;
+      out.push(p ? ((c - p) / p) * 100 : 0);
+    }
+    return out;
+  }
+
+  // -------- charts ----------
+  function initAll(data) {
+    initTrendChart(data.labels, data.trendDatasets);
+    initGrowthChart(data.growthData);
+    initDensityChart(data.density);
+    updateStats(data.stats);
+  }
+  function updateAll(data) {
+    if (!data) return;
+    // trend
+    charts.trend.data.labels = data.labels;
+    charts.trend.data.datasets = data.trendDatasets;
+    charts.trend.update();
+    // growth
+    charts.growth.data.labels = data.growthData.map(d => d.name);
+    charts.growth.data.datasets[0].data = data.growthData.map(d => d.pct);
+    charts.growth.update();
+    // density
+    charts.density.data.labels = data.density.map(d => d.name);
+    charts.density.data.datasets[0].data = data.density.map(d => d.value);
+    charts.density.update();
+    // stats
+    updateStats(data.stats);
+  }
+
+  function initTrendChart(labels, datasets) {
+    const ctx = document.getElementById('trend-chart');
+    if (!ctx) return;
+    charts.trend?.destroy();
+    charts.trend = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y.toLocaleString()}` } }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Year' }, grid: { display: false } },
+          y: { title: { display: true, text: 'Population' }, ticks: { callback: v => (v/1000)+'k' } }
+        }
+      }
+    });
+  }
+
+  function initGrowthChart(growthData) {
+    const ctx = document.getElementById('growth-chart');
+    if (!ctx) return;
+    charts.growth?.destroy();
+    charts.growth = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: growthData.map(d => d.name),
+        datasets: [{ label: 'Growth % (selected range)', data: growthData.map(d => d.pct), backgroundColor: '#6366f1' }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.x.toFixed(1)}%` } } },
+        scales: {
+          x: { title: { display: true, text: 'Percent' }, ticks: { callback: v => v + '%' } },
+          y: { title: { display: false } }
+        }
+      }
+    });
+  }
+
+  function initDensityChart(densityData) {
+    const ctx = document.getElementById('density-chart');
+    if (!ctx) return;
+    charts.density?.destroy();
+    charts.density = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: densityData.map(d => d.name),
+        datasets: [{ label: 'Population density (2021, persons/km²)', data: densityData.map(d => d.value), backgroundColor: '#10b981' }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.x.toLocaleString() + ' per km²' } } },
+        scales: {
+          x: { title: { display: true, text: 'Persons per km²' } },
+          y: { title: { display: false } }
+        }
+      }
+    });
+  }
+
+  function updateStats({ totalPopulation, avgGrowthRate, yearsAnalyzed }) {
+    const totalEl  = document.getElementById('total-population');
+    const growthEl = document.getElementById('avg-growth');
+    const yearsEl  = document.getElementById('years-analyzed');
+    if (totalEl)  totalEl.textContent  = totalPopulation.toLocaleString();
+    if (growthEl) growthEl.textContent = avgGrowthRate + '%';
+    if (yearsEl)  yearsEl.textContent  = yearsAnalyzed;
+  }
+})();
+
+
+/*
 // Population analytics: data, filters, and Chart.js rendering
 // Exposes window.PopulationAnalytics.ensureInitialized()
 
@@ -223,4 +498,4 @@
       if (yearsEl)  yearsEl.textContent = data.yearsAnalyzed;
     }
   })();
-  
+  */
