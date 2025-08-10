@@ -52,10 +52,35 @@ const API_BASE = "https://xbtfcqbgeh.execute-api.ap-southeast-2.amazonaws.com";
 
 async function searchParkingSpaces(location) {
   const url = `${API_BASE}/parking-api?location=${encodeURIComponent(location)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`API error ${res.status}`);
-  const data = await res.json();
-  return Array.isArray(data.results) ? data.results : [];
+  console.log("[parking] GET", url);
+  const res = await fetch(url, {
+    method: "GET",
+    // No custom headers = no CORS preflight headaches
+  });
+
+  // Helpful console diagnostics
+  console.log("[parking] status", res.status, res.statusText);
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (e) {
+    const text = await res.text();
+    console.error("[parking] Non-JSON response:", text);
+    throw new Error(`API returned non-JSON (${res.status})`);
+  }
+
+  console.log("[parking] body", data);
+
+  if (!res.ok) {
+    const msg = (data && (data.message || data.error)) || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  // Expect shape: { results: [...], total, message }
+  if (Array.isArray(data.results)) return data.results;
+
+  return [];
 }
 
   
