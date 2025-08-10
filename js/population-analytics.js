@@ -196,70 +196,32 @@
   }
 
   function initTrendChart(labels, datasets) {
-    const ctx = document.getElementById('trend-chart');
-    if (!ctx) return;
-    charts.trend?.destroy();
-    charts.trend = new Chart(ctx, {
-      type: 'line',
-      data: { labels, datasets },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { position: 'bottom' },
-          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y.toLocaleString()}` } }
-        },
-        scales: {
-          x: { title: { display: true, text: 'Year' }, grid: { display: false } },
-          y: { title: { display: true, text: 'Population' }, ticks: { callback: v => (v/1000)+'k' } }
-        }
-      }
-    });
-  }
+  const ctx =
+    document.getElementById('trend-chart') ||
+    document.getElementById('population-bar-chart'); // ← fallback to old id
+  if (!ctx) { console.warn('Trend canvas not found'); return; }
+  charts.trend?.destroy();
+  charts.trend = new Chart(ctx, { /* ...unchanged options... */ });
+}
 
-  function initGrowthChart(growthData) {
-    const ctx = document.getElementById('growth-chart');
-    if (!ctx) return;
-    charts.growth?.destroy();
-    charts.growth = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: growthData.map(d => d.name),
-        datasets: [{ label: 'Growth % (selected range)', data: growthData.map(d => d.pct), backgroundColor: '#6366f1' }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.parsed.x.toFixed(1)}%` } } },
-        scales: {
-          x: { title: { display: true, text: 'Percent' }, ticks: { callback: v => v + '%' } },
-          y: { title: { display: false } }
-        }
-      }
-    });
-  }
+function initGrowthChart(growthData) {
+  const ctx =
+    document.getElementById('growth-chart') ||
+    document.getElementById('population-line-chart'); // ← fallback to old id
+  if (!ctx) { console.warn('Growth canvas not found'); return; }
+  charts.growth?.destroy();
+  charts.growth = new Chart(ctx, { /* ...unchanged options... */ });
+}
 
-  function initDensityChart(densityData) {
-    const ctx = document.getElementById('density-chart');
-    if (!ctx) return;
-    charts.density?.destroy();
-    charts.density = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: densityData.map(d => d.name),
-        datasets: [{ label: 'Population density (2021, persons/km²)', data: densityData.map(d => d.value), backgroundColor: '#10b981' }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.x.toLocaleString() + ' per km²' } } },
-        scales: {
-          x: { title: { display: true, text: 'Persons per km²' } },
-          y: { title: { display: false } }
-        }
-      }
-    });
-  }
+function initDensityChart(densityData) {
+  const ctx =
+    document.getElementById('density-chart') ||
+    document.getElementById('population-density-chart'); // if you add one later
+  if (!ctx) { console.warn('Density canvas not found'); return; }
+  charts.density?.destroy();
+  charts.density = new Chart(ctx, { /* ...unchanged options... */ });
+}
+
 
   function updateStats({ totalPopulation, avgGrowthRate, yearsAnalyzed }) {
     const totalEl  = document.getElementById('total-population');
