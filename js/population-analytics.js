@@ -1,24 +1,29 @@
-// Population Analytics (Chart.js) — CBD East/North/West only via JSON
+// Population Analytics (Chart.js) — CBD East/North/West via JSON (robust w/ legacy IDs)
 (function () {
+  'use strict';
+
   const charts = { trend: null, growth: null, density: null };
   let raw = null;
   let initialized = false;
   let selectedRegions = new Set();
 
+  // Public API (called by your tab switcher)
   window.PopulationAnalytics = { ensureInitialized };
 
+  // Called on DOMContentLoaded in your main.js
   window.initializePopulationAnalytics = function () {
-    const applyBtn = document.getElementById('apply-filters-btn');
-    const resetBtn = document.getElementById('reset-filters-btn');
+    const applyBtn     = document.getElementById('apply-filters-btn');
+    const resetBtn     = document.getElementById('reset-filters-btn');
     const regionSelect = document.getElementById('region-select');
     const selectAllBtn = document.getElementById('select-all-regions');
-    const clearBtn = document.getElementById('clear-regions');
+    const clearBtn     = document.getElementById('clear-regions');
 
     applyBtn?.addEventListener('click', () => {
       const { fromYear, toYear } = getYearRange();
       if (fromYear > toYear) return alert('From Year cannot be later than To Year');
       updateFilterInfo(fromYear, toYear);
-      updateAll(buildFiltered(raw, fromYear, toYear, [...selectedRegions]));
+      const data = buildFiltered(raw, fromYear, toYear, [...selectedRegions]);
+      if (!charts.trend) initAll(data); else updateAll(data);
     });
 
     resetBtn?.addEventListener('click', () => {
@@ -27,11 +32,14 @@
       updateFilterInfo(defaults.from, defaults.to);
       selectedRegions = new Set(Object.keys(raw?.regions || {}));
       syncRegionSelect(regionSelect, selectedRegions);
-      updateAll(buildFiltered(raw, defaults.from, defaults.to, [...selectedRegions]));
+      const data = buildFiltered(raw, defaults.from, defaults.to, [...selectedRegions]);
+      if (!charts.trend) initAll(data); else updateAll(data);
     });
 
     regionSelect?.addEventListener('change', () => {
-      selectedRegions = new Set([...regionSelect.options].filter(o => o.selected).map(o => o.value));
+      selectedRegions = new Set(
+        [...regionSelect.options].filter(o => o.selected).map(o => o.value)
+      );
     });
 
     selectAllBtn?.addEventListener('click', () => {
@@ -44,35 +52,49 @@
       syncRegionSelect(regionSelect, selectedRegions);
     });
 
-    // Load data
+    // Load the JSON from repo root
     loadJSON('./population_sa4.json')
       .then(data => {
+        console.log('✅ Loaded population_sa4.json');
         raw = data;
+
+        // Default: all regions selected (if the control exists)
         populateRegionSelect(regionSelect, Object.keys(raw.regions));
-        selectedRegions = new Set(Object.keys(raw.regions)); // default: all
+        selectedRegions = new Set(Object.keys(raw.regions));
+
+        // If user is already on the analytics tab, render immediately
+        try { ensureInitialized(); } catch (_) {}
       })
-      .catch(err => console.error('Failed to load population_sa4.json', err));
+      .catch(err => console.error('❌ Failed to load population_sa4.json:', err));
   };
 
   function ensureInitialized() {
     if (initialized || !raw) return;
+
+    // If inputs are empty, set a sensible default
+    const fyEl = document.getElementById('from-year');
+    const tyEl = document.getElementById('to-year');
+    if (fyEl && !fyEl.value) fyEl.value = '2011';
+    if (tyEl && !tyEl.value) tyEl.value = '2021';
+
     const { fromYear, toYear } = getYearRange();
     updateFilterInfo(fromYear, toYear);
+
     const filtered = buildFiltered(raw, fromYear, toYear, [...selectedRegions]);
     initAll(filtered);
     initialized = true;
   }
 
-  // -------- data/io ----------
+  // ---------- IO ----------
   async function loadJSON(path) {
     const res = await fetch(path, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   }
 
-  // -------- ui helpers ----------
+  // ---------- UI helpers ----------
   function populateRegionSelect(selectEl, regions) {
-    if (!selectEl) return;
+    if (!selectEl) return; // optional control
     selectEl.innerHTML = '';
     regions.forEach(r => {
       const opt = document.createElement('option');
@@ -85,22 +107,24 @@
     [...selectEl.options].forEach(o => { o.selected = selected.has(o.value); });
   }
 
-  // -------- filters ----------
+  // ---------- Filters ----------
   function getYearRange() {
-    const fromYear = parseInt(document.getElementById('from-year').value, 10);
-    const toYear   = parseInt(document.getElementById('to-year').value, 10);
+    const fromYear = parseInt(document.getElementById('from-year')?.value ?? '2011', 10);
+    const toYear   = parseInt(document.getElementById('to-year')?.value   ?? '2021', 10);
     return { fromYear, toYear };
   }
   function setYearRange(from, to) {
-    document.getElementById('from-year').value = String(from);
-    document.getElementById('to-year').value   = String(to);
+    const fy = document.getElementById('from-year');
+    const ty = document.getElementById('to-year');
+    if (fy) fy.value = String(from);
+    if (ty) ty.value = String(to);
   }
   function updateFilterInfo(from, to) {
     const span = document.getElementById('filter-range');
     if (span) span.textContent = `${from} - ${to}`;
   }
 
-  // -------- derivations ----------
+  // ---------- Derivations ----------
   function buildFiltered(rawData, fromYear, toYear, chosen) {
     if (!rawData) return null;
 
@@ -112,7 +136,7 @@
     const regions = chosen.length ? chosen : Object.keys(rawData.regions);
     const palette = ['#6366f1','#10b981','#f59e0b'];
 
-    // Trend datasets
+    // Line trend per region
     const trendDatasets = regions.map((name, i) => {
       const arr = rawData.regions[name].population;
       return {
@@ -126,7 +150,7 @@
       };
     });
 
-    // Growth % per region (first vs last value within selected range)
+    // Growth % (first vs last in current range)
     const growthData = regions.map(name => {
       const series = rawData.regions[name].population;
       const sub = valid ? series.slice(s, e + 1) : series.slice();
@@ -135,12 +159,12 @@
       return { name, pct: +pct.toFixed(1) };
     }).sort((a,b) => b.pct - a.pct);
 
-    // Density 2021 for selected regions
+    // 2021 density
     const density = regions.map(name => ({
       name, value: rawData.regions[name].density_2021 ?? 0
     })).sort((a,b) => b.value - a.value);
 
-    // Stats (sum of selected regions, latest year in range)
+    // Aggregate stats (sum of selected regions, latest year in range)
     const totals = labels.map((_, idx) =>
       regions.reduce((sum, r) => {
         const series = rawData.regions[r].population;
@@ -170,58 +194,136 @@
     return out;
   }
 
-  // -------- charts ----------
+  // ---------- Charts ----------
   function initAll(data) {
     initTrendChart(data.labels, data.trendDatasets);
     initGrowthChart(data.growthData);
     initDensityChart(data.density);
     updateStats(data.stats);
   }
+
   function updateAll(data) {
     if (!data) return;
-    // trend
-    charts.trend.data.labels = data.labels;
-    charts.trend.data.datasets = data.trendDatasets;
-    charts.trend.update();
-    // growth
-    charts.growth.data.labels = data.growthData.map(d => d.name);
-    charts.growth.data.datasets[0].data = data.growthData.map(d => d.pct);
-    charts.growth.update();
-    // density
-    charts.density.data.labels = data.density.map(d => d.name);
-    charts.density.data.datasets[0].data = data.density.map(d => d.value);
-    charts.density.update();
-    // stats
+
+    if (charts.trend) {
+      charts.trend.data.labels   = data.labels;
+      charts.trend.data.datasets = data.trendDatasets;
+      charts.trend.update();
+    } else {
+      initTrendChart(data.labels, data.trendDatasets);
+    }
+
+    if (charts.growth) {
+      charts.growth.data.labels = data.growthData.map(d => d.name);
+      charts.growth.data.datasets[0].data = data.growthData.map(d => d.pct);
+      charts.growth.update();
+    } else {
+      initGrowthChart(data.growthData);
+    }
+
+    if (charts.density) {
+      charts.density.data.labels = data.density.map(d => d.name);
+      charts.density.data.datasets[0].data = data.density.map(d => d.value);
+      charts.density.update();
+    } else {
+      initDensityChart(data.density);
+    }
+
     updateStats(data.stats);
   }
 
+  // Grab the right canvas even if IDs are the old ones
+  function getTrendCtx() {
+    return document.getElementById('trend-chart')
+        || document.getElementById('population-bar-chart'); // legacy
+  }
+  function getGrowthCtx() {
+    return document.getElementById('growth-chart')
+        || document.getElementById('population-line-chart'); // legacy
+  }
+  function getDensityCtx() {
+    return document.getElementById('density-chart'); // optional; no legacy id existed
+  }
+
   function initTrendChart(labels, datasets) {
-  const ctx =
-    document.getElementById('trend-chart') ||
-    document.getElementById('population-bar-chart'); // ← fallback to old id
-  if (!ctx) { console.warn('Trend canvas not found'); return; }
-  charts.trend?.destroy();
-  charts.trend = new Chart(ctx, { /* ...unchanged options... */ });
-}
+    const ctx = getTrendCtx();
+    if (!ctx) { console.warn('⚠️ Trend canvas not found'); return; }
+    charts.trend?.destroy();
+    charts.trend = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${c.parsed.y.toLocaleString()}` } }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Year' }, grid: { display: false } },
+          y: { title: { display: true, text: 'Population' }, ticks: { callback: v => (v/1000)+'k' } }
+        }
+      }
+    });
+  }
 
-function initGrowthChart(growthData) {
-  const ctx =
-    document.getElementById('growth-chart') ||
-    document.getElementById('population-line-chart'); // ← fallback to old id
-  if (!ctx) { console.warn('Growth canvas not found'); return; }
-  charts.growth?.destroy();
-  charts.growth = new Chart(ctx, { /* ...unchanged options... */ });
-}
+  function initGrowthChart(growthData) {
+    const ctx = getGrowthCtx();
+    if (!ctx) { console.warn('⚠️ Growth canvas not found'); return; }
+    charts.growth?.destroy();
+    charts.growth = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: growthData.map(d => d.name),
+        datasets: [{
+          label: 'Growth % (selected range)',
+          data: growthData.map(d => d.pct),
+          backgroundColor: '#6366f1'
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => `${c.parsed.x.toFixed(1)}%` } }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Percent' }, ticks: { callback: v => v + '%' } },
+          y: { title: { display: false } }
+        }
+      }
+    });
+  }
 
-function initDensityChart(densityData) {
-  const ctx =
-    document.getElementById('density-chart') ||
-    document.getElementById('population-density-chart'); // if you add one later
-  if (!ctx) { console.warn('Density canvas not found'); return; }
-  charts.density?.destroy();
-  charts.density = new Chart(ctx, { /* ...unchanged options... */ });
-}
-
+  function initDensityChart(densityData) {
+    const ctx = getDensityCtx();
+    if (!ctx) { console.info('ℹ️ Density canvas not present (skipping)'); return; }
+    charts.density?.destroy();
+    charts.density = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: densityData.map(d => d.name),
+        datasets: [{
+          label: 'Population density (2021, persons/km²)',
+          data: densityData.map(d => d.value),
+          backgroundColor: '#10b981'
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: c => c.parsed.x.toLocaleString() + ' per km²' } }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Persons per km²' } },
+          y: { title: { display: false } }
+        }
+      }
+    });
+  }
 
   function updateStats({ totalPopulation, avgGrowthRate, yearsAnalyzed }) {
     const totalEl  = document.getElementById('total-population');
@@ -232,7 +334,6 @@ function initDensityChart(densityData) {
     if (yearsEl)  yearsEl.textContent  = yearsAnalyzed;
   }
 })();
-
 
 /*
 // Population analytics: data, filters, and Chart.js rendering
