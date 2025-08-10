@@ -45,7 +45,7 @@
     });
 
     // Load data
-    loadJSON('/population_sa4.json')
+    loadJSON('./population_sa4.json')
       .then(data => {
         raw = data;
         populateRegionSelect(regionSelect, Object.keys(raw.regions));
