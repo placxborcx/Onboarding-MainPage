@@ -57,27 +57,16 @@ function initializeParkingSearch() {
 
   // ==== API ====
   const API_BASE = "https://2p80xozjm2.execute-api.ap-southeast-2.amazonaws.com/dev";
-  const PATH = "/api/parking_live";
+  const PATH = "/api/parking/nearby";
+
 
 
   async function fetchNearbyByAddress(address) {
-    const url = `${API_BASE}${PATH}/parking/nearby?q=${encodeURIComponent(address)}`;
-    console.log('[nearby] GET', url);
+    const url = `${API_BASE}${PATH}?q=${encodeURIComponent(address)}`;
     const res = await fetch(url, { method: 'GET' });
-
-    let body;
-    try {
-      body = await res.json();
-    } catch (e) {
-      const txt = await res.text();
-      throw new Error(`Non-JSON response (${res.status}): ${txt.slice(0,200)}`);
-    }
-
-    if (!res.ok || body.success === false) {
-      throw new Error(body.error || body.message || `HTTP ${res.status}`);
-    }
-
-    return body; // { success, center, bands_m, results:{ within_100m, 100_to_200m, ... } }
+    const body = await res.json().catch(async () => { throw new Error(await res.text()); });
+    if (!res.ok || body.success === false) throw new Error(body.error || `HTTP ${res.status}`);
+    return body;
   }
 
   // ==== Renderers ====
