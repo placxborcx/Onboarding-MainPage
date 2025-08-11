@@ -57,12 +57,11 @@ function initializeParkingSearch() {
 
   // ==== API ====
   const API_BASE = "https://5u3k8vzu77.execute-api.ap-southeast-2.amazonaws.com";
-  const PATH = "/api/parking/nearby";
 
 
 
   async function fetchNearbyByAddress(address) {
-    const url = `${API_BASE}${PATH}?q=${encodeURIComponent(address)}`;
+    const url = `${API_BASE}?q=${encodeURIComponent(address)}`;
     const res = await fetch(url, { method: 'GET' });
     const body = await res.json().catch(async () => { throw new Error(await res.text()); });
     if (!res.ok || body.success === false) throw new Error(body.error || `HTTP ${res.status}`);
