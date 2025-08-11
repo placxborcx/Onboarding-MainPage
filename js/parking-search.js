@@ -56,7 +56,7 @@ function initializeParkingSearch() {
   }
 
   // ==== API ====
-  const API_BASE = "https://5u3k8vzu77.execute-api.ap-southeast-2.amazonaws.com";
+  const API_BASE = "https://9x8vex1yjc.execute-api.ap-southeast-2.amazonaws.com/default/smartpark-backend";
   const PATH = "/api/parking/nearby"
 
 
