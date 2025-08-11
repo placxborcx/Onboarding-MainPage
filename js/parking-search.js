@@ -56,8 +56,8 @@ function initializeParkingSearch() {
   }
 
   // ==== API ====
-  const API_BASE = "https://5u3k8vzu77.execute-api.ap-southeast-2.amazonaws.com";
-  const PATH = "/backend/api/parking/nearby"
+  const API_BASE = "https://5u3k8vzu77.execute-api.ap-southeast-2.amazonaws.com/backend";
+  const PATH = "/api/parking/nearby"
 
 
   async function fetchNearbyByAddress(address) {
