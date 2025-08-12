@@ -56,46 +56,93 @@
           </button>
       </div>
 
+      
       <!-- Parking Search -->
       <div class="function-panel active" id="parking-panel">
-        <div class="search-section">
-          <div class="search-header">
-            <h2>Find Parking Near You</h2>
-            <p>Search for available parking spaces in your area</p>
-          </div>
-
-          <div class="search-form">
-            <div class="input-group">
-              <input
-                type="text"
-                id="location-input"
-                placeholder="Enter Australian city or suburb (e.g., Clayton, Melbourne)"
-                class="location-input"
-              />
-              <button type="button" id="find-parking-btn" class="find-btn">
-                Find Parking
-              </button>
+        <!-- Hero Section -->
+        <div class="hero-section">
+          <div class="hero-content">
+            <h1 class="hero-title">Find Parking in <span class="text-gradient">Melbourne CBD</span></h1>
+            <p class="hero-description">Real-time parking availability across Melbourne's Central Business District. Never circle the block again.</p>
+            
+            <div class="search-container">
+              <div class="search-input-wrapper">
+                <input
+                  type="text"
+                  id="location-input"
+                  placeholder="Enter street name (e.g., Collins Street, Bourke Street)"
+                  class="hero-search-input"
+                />
+                <button type="button" id="find-parking-btn" class="hero-search-btn">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                  </svg>
+                  Search
+                </button>
+              </div>
             </div>
           </div>
+        </div>
 
-          <!-- Loading State -->
-          <div class="loading-state hidden" id="loading">
-            <div class="spinner"></div>
-            <p>Searching for available parking spaces...</p>
-          </div>
+        <!-- Features Section -->
+        <div class="features-section">
+          <div class="features-grid">
+            <div class="feature-card">
+              <div class="feature-image">
+                <div class="feature-placeholder">
+                  <div class="feature-icon">🔍</div>
+                </div>
+              </div>
+              <div class="feature-content">
+                <h3 class="feature-title">Smart Search</h3>
+                <p class="feature-description">Type any Melbourne CBD street name and get instant results</p>
+              </div>
+            </div>
 
-          <!-- Results Section -->
-          <div class="results-section hidden" id="results-section">
-            <h3>Available Parking Spaces</h3>
-            <div class="parking-list" id="parking-list"></div>
-          </div>
+            <div class="feature-card">
+              <div class="feature-image">
+                <div class="feature-placeholder">
+                  <div class="feature-icon">🔄</div>
+                </div>
+              </div>
+              <div class="feature-content">
+                <h3 class="feature-title">Live Updates</h3>
+                <p class="feature-description">Real-time parking status updated every few minutes</p>
+              </div>
+            </div>
 
-          <!-- No Results -->
-          <div class="no-results hidden" id="no-results">
-            <div class="no-results-icon">🚫</div>
-            <h3>No Available Parking Found</h3>
-            <p>Sorry, no parking spaces are currently available in your search area.</p>
+            <div class="feature-card">
+              <div class="feature-image">
+                <div class="feature-placeholder">
+                  <div class="feature-icon">🧭</div>
+                </div>
+              </div>
+              <div class="feature-content">
+                <h3 class="feature-title">Navigate to Available Space</h3>
+                <p class="feature-description">Get direct navigation to confirmed parking spots</p>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <!-- Loading State -->
+        <div class="loading-state hidden" id="loading">
+          <div class="spinner"></div>
+          <p>Searching for available parking spaces...</p>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section hidden" id="results-section">
+          <h3>Available Parking Spaces</h3>
+          <div class="parking-list" id="parking-list"></div>
+        </div>
+
+        <!-- No Results -->
+        <div class="no-results hidden" id="no-results">
+          <div class="no-results-icon">🚫</div>
+          <h3>No Available Parking Found</h3>
+          <p>Sorry, no parking spaces are currently available in your search area.</p>
         </div>
       </div>
 
