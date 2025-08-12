@@ -17,13 +17,29 @@ function initializeParkingSearch() {
 
   // ---- Mapbox config ----
   const MAPBOX_TOKEN   = "pk.eyJ1IjoibGVvbi0xMzIiLCJhIjoiY21lNmt3MDU5MHE1NzJzcHI3bnI4dnBuaiJ9.bGUrNp8xR2edF6INiJYwww";
-  const REQUIRE_EXACT  = false; // allow Enter without picking
-  const SEARCH_CENTER  = { lon: 144.9631, lat: -37.8136 }; // CBD
-  const MAX_RADIUS_KM  = 40;
+  const REQUIRE_EXACT  = false;                               // force user to choose from dropdown (if true)
+  const SEARCH_CENTER  = { lon: 144.9631, lat: -37.8136 };    // CBD
+  const MAX_RADIUS_KM  = 40;                                  // keep suggestions to Greater Melbourne
 
-  let chosen = null; // selected suggestion
+  let chosen = null;  // the picked suggestion
+  let lastBands = null, lastCenter = null;
 
-  // ---- Dropdown ----
+  // ---- Sort control ----
+  const sortWrap = document.createElement('div');
+  sortWrap.style.margin = '10px 0';
+  sortWrap.innerHTML = `
+    <label style="font-weight:600;margin-right:8px;">Sort by:</label>
+    <select id="sort-mode">
+      <option value="distance">Distance (default)</option>
+      <option value="maxstay">Longest stay</option>
+    </select>`;
+  resultsSection?.insertAdjacentElement('afterbegin', sortWrap);
+  const sortSelect = sortWrap.querySelector('#sort-mode');
+  sortSelect.addEventListener('change', () => {
+    if (lastBands) renderBands(parkingList, lastBands, lastCenter, sortSelect.value);
+  });
+
+  // ---- Dropdown UI under input ----
   const dropdown = document.createElement('div');
   dropdown.className = 'ac-list ac-hidden';
   const parent = locationInput.parentElement;
@@ -49,18 +65,17 @@ function initializeParkingSearch() {
   });
 
   function iconFor(type) {
-  switch (type) {
-    case 'address':     return '🏠';
-    case 'poi':         return '📍';
-    case 'place':
-    case 'locality':    return '🗺️';
-    case 'neighborhood':
-    case 'district':    return '🏙️';
-    case 'postcode':    return '🏷️';
-    default:            return '📌';
+    switch (type) {
+      case 'address': return '🏠';
+      case 'poi': return '📍';
+      case 'place':
+      case 'locality': return '🗺️';
+      case 'neighborhood':
+      case 'district': return '🏙️';
+      case 'postcode': return '🏷️';
+      default: return '📌';
+    }
   }
-}
-
 
   function moveHighlight(delta) {
     const n = dropdown.__items.length;
@@ -71,7 +86,7 @@ function initializeParkingSearch() {
   let suggestDebounce, suggestInFlight;
   async function handleSuggestInput() {
     const q = (locationInput.value || '').trim();
-    chosen = null;
+    chosen = null; // typing resets current selection
     if (suggestDebounce) clearTimeout(suggestDebounce);
     if (!q) { dropdown.classList.add('ac-hidden'); dropdown.__items = []; return; }
 
@@ -83,7 +98,7 @@ function initializeParkingSearch() {
         dropdown.__items = items;
         dropdown.__hi = items.length ? 0 : -1;
         renderDropdown(items);
-      } catch { /* ignore */ }
+      } catch (e) { /* ignore */ }
     }, 150);
   }
 
@@ -107,7 +122,7 @@ function initializeParkingSearch() {
 
   function selectItem(it) {
     chosen = it;
-    locationInput.value = it.label;
+    locationInput.value = it.label; // show full place name
     dropdown.classList.add('ac-hidden');
   }
 
@@ -135,6 +150,12 @@ function initializeParkingSearch() {
       const data = await fetchJson(url, inFlight.signal);
       const { bands, center } = normalizeToBands(data);
 
+      // remember for resorting
+      lastBands = bands; lastCenter = center;
+
+      // initial render (respect sort selector)
+      renderBands(parkingList, bands, center, sortSelect.value);
+
       const hasAny =
         (bands.within_100m?.length) ||
         (bands["100_to_200m"]?.length) ||
@@ -142,7 +163,6 @@ function initializeParkingSearch() {
         (bands["500_to_1000m"]?.length);
 
       if (hasAny) {
-        renderBands(parkingList, bands, center);
         resultsSection.classList.remove('hidden');
       } else {
         noResults.classList.remove('hidden');
@@ -284,7 +304,11 @@ function initializeParkingSearch() {
         status_description: item?.status_description ?? item?.status ?? null,
         status_timestamp: item?.status_timestamp ?? null,
         lastupdated: item?.lastupdated ?? null,
-        zone_number: item?.zone_number ?? null
+        zone_number: item?.zone_number ?? null,
+        street: item?.street ?? null,
+        max_stay_label: item?.max_stay_label ?? null,
+        max_stay_min: item?.max_stay_min ?? null,
+        metered: !!item?.metered,
       };
       if (bay.distance_m <= 100) bands.within_100m.push(bay);
       else if (bay.distance_m <= 200) bands["100_to_200m"].push(bay);
@@ -309,7 +333,7 @@ function initializeParkingSearch() {
   }
 
   // ---- Renderers ----
-  function renderBands(container, bands, center) {
+  function renderBands(container, bands, center, sortMode = 'distance') {
     container.innerHTML = '';
     const order = [
       ['within_100m',  'Within 100 m'],
@@ -317,20 +341,34 @@ function initializeParkingSearch() {
       ['200_to_500m',  '200–500 m'],
       ['500_to_1000m', '500–1000 m']
     ];
+
     if (center && typeof center.lat === 'number' && typeof center.lon === 'number') {
       const hint = document.createElement('div');
       hint.className = 'search-center-hint';
       hint.textContent = `Search center: (${center.lat.toFixed(5)}, ${center.lon.toFixed(5)})`;
       container.appendChild(hint);
     }
+
+    // comparator for "Longest stay" (desc), tie-breaker distance (asc)
+    const byMaxStay = (a, b) => {
+      const av = a.max_stay_min ?? -1;
+      const bv = b.max_stay_min ?? -1;
+      if (av !== bv) return bv - av;
+      return (a.distance_m ?? 1e9) - (b.distance_m ?? 1e9);
+    };
+
     order.forEach(([key, label]) => {
-      const items = bands[key] || [];
+      const items = (bands[key] || []).slice(); // clone (don’t mutate original)
+      if (sortMode === 'maxstay') items.sort(byMaxStay);
+
       const section = document.createElement('div');
       section.className = 'band-section';
+
       const header = document.createElement('h3');
       header.className = 'band-title';
       header.textContent = `${label} (${items.length})`;
       section.appendChild(header);
+
       if (!items.length) {
         const empty = document.createElement('div');
         empty.className = 'band-empty';
@@ -349,15 +387,22 @@ function initializeParkingSearch() {
   function createBayCard(bay) {
     const card = document.createElement('div');
     card.className = 'parking-item';
-    const status = (bay.status_description || '').toLowerCase();
-    const badgeClass =
-      status.includes('unoccupied') ? 'success' :
-      status.includes('present')    ? 'danger'  : 'warning';
+
+    const s = (bay.status_description || '').toLowerCase();
+    const isAvail = s.includes('unoccupied');
+    const statusText = isAvail ? 'Available' : 'Unavailable';
+    const badgeClass = isAvail ? 'success' : 'danger';
+
     const gm = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
+    const street = bay.street || `Bay #${bay.kerbsideid ?? 'N/A'}`;
+
+    const meterBadge = bay.metered ? `<span class="pill">Metered</span>` : '';
+    const maxStay = bay.max_stay_label ? `<span class="pill">${bay.max_stay_label}</span>` : '';
+
     card.innerHTML = `
       <div class="parking-header">
         <div>
-          <div class="parking-name">Bay #${bay.kerbsideid ?? 'N/A'}</div>
+          <div class="parking-name">${street}</div>
           <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
         </div>
         <div class="parking-availability ${badgeClass}">
@@ -367,8 +412,10 @@ function initializeParkingSearch() {
       <div class="parking-details">
         <div class="parking-info">
           <div class="info-item"><span>🕒</span><span>${formatTime(bay.status_timestamp || bay.lastupdated)}</span></div>
-          <div class="info-item"><span>🚦</span><span>${bay.status_description || 'Unknown'}</span></div>
+          <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
           <div class="info-item"><span>🧭</span><span>Zone ${bay.zone_number ?? '—'}</span></div>
+          <div class="info-item"><span>⏳</span><span>${maxStay || '—'}</span></div>
+          <div class="info-item"><span>💳</span><span>${meterBadge || '—'}</span></div>
         </div>
         <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
       </div>
