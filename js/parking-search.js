@@ -18,7 +18,9 @@ function initializeParkingSearch() {
   // ---- Mapbox config (frontend-only autocomplete) ----
   const MAPBOX_TOKEN = "pk.eyJ1IjoibGVvbi0xMzIiLCJhIjoiY21lNmt3MDU5MHE1NzJzcHI3bnI4dnBuaiJ9.bGUrNp8xR2edF6INiJYwww";
   const MELB_BBOX = [144.80, -37.90, 145.20, -37.60]; // minLon,minLat,maxLon,maxLat  (CBD-ish)
-  const REQUIRE_EXACT = true; // force user to choose from dropdown
+  const REQUIRE_EXACT = false; // force user to choose from dropdown
+  const SEARCH_CENTER = { lon: 144.9631, lat: -37.8136 }; // Melbourne CBD
+  const MAX_RADIUS_KM = 40; // Greater Melbourne radius for suggestions
   let chosen = null;          // the selected suggestion
 
   // ---- Build dropdown under the input ----
@@ -180,45 +182,54 @@ function initializeParkingSearch() {
   // ---- Mapbox suggest ----
   async function mapboxSuggest(q, {signal} = {}) {
   const base = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`;
-  const MELB_BBOX = [144.90, -37.86, 145.05, -37.76]; // minLon,minLat,maxLon,maxLat
-
   const params =
     `access_token=${MAPBOX_TOKEN}` +
     `&autocomplete=true&limit=8` +
     `&country=AU` +
-    `&proximity=144.9631,-37.8136` + // lon,lat (CBD)
-    `&bbox=${MELB_BBOX.join(',')}` +
-    // ✅ NO "street" here:
+    `&proximity=${SEARCH_CENTER.lon},${SEARCH_CENTER.lat}` + // bias to CBD
+    // NO bbox here (it was blocking many valid results)
     `&types=address,poi,place,locality,neighborhood,postcode,district`;
 
   const url = `${base}?${params}`;
   const res = await fetch(url, { signal });
   const data = await res.json();
-
   if (!res.ok) {
     console.error('[mapbox] suggest error', res.status, data);
     throw new Error(data?.message || `HTTP ${res.status}`);
   }
 
   const feats = data.features || [];
+
+  // Distance filter: keep results within ~Greater Melbourne and preferably in VIC
+  function km(aLat, aLon, bLat, bLon) {
+    const R = 6371, toRad = d => d * Math.PI/180;
+    const dLat = toRad(bLat - aLat), dLon = toRad(bLon - aLon);
+    const s = Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.sqrt(s));
+  }
+
   const filtered = feats.filter(f => {
+    const [lon, lat] = f.center || [];
+    if (lat == null || lon == null) return false;
+    const within = km(SEARCH_CENTER.lat, SEARCH_CENTER.lon, lat, lon) <= MAX_RADIUS_KM;
+
+    // lightly prefer VIC if context exists, but don't hard fail if missing
     const ctx = f.context || [];
-    const hasMelb = /melbourne/i.test(f.place_name);
-    const hasVIC  = ctx.some(c=> /(victoria|vic)/i.test(c.text || c.short_code || ''));
-    const hasAU   = ctx.some(c=> /(australia|country\.au)/i.test(c.text || c.id || c.short_code || ''));
-    return hasMelb && hasVIC && hasAU;
+    const inVIC = ctx.some(c => /(victoria|AU-VIC|\bVIC\b)/i.test(c.text || c.short_code || ''));
+    return within && (inVIC || true);
   });
 
   return filtered.map(f => ({
     id: f.id,
-    label: f.place_name,
-    primary: f.text,
+    label: f.place_name,          // full display (includes house number if present)
+    primary: f.text,              // main line
     secondary: (f.context||[]).map(c=>c.text).join(' • '),
     lat: f.center?.[1],
     lon: f.center?.[0],
     type: (f.place_type && f.place_type[0]) || 'poi'
   }));
 }
+
 
 
   function iconFor(type){
