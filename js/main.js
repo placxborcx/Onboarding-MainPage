@@ -26,22 +26,17 @@ function initializeTabs() {
   });
 }
 
-/** Setup navbar links to switch tabs */
+/** Setup navbar tabs to switch tabs */
 function initializeNavbarTabs() {
-  document.querySelectorAll('.nav-link[data-tab]').forEach(link => {
+  document.querySelectorAll('.top-tab[data-tab]').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       const targetTab = link.getAttribute('data-tab');
       switchTab(targetTab);
 
-      // set navbar active
-      document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+      // set top tab active
+      document.querySelectorAll('.top-tab').forEach(l => l.classList.remove('active'));
       link.classList.add('active');
-
-      // set lower tab button active
-      tabButtons.forEach(btn => {
-        btn.classList.toggle('active', btn.getAttribute('data-tab') === targetTab);
-      });
     });
   });
 }

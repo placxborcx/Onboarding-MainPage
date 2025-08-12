@@ -19,80 +19,74 @@
       <div class="nav-brand">
         <div class="logo">
           <span class="logo-icon">🅿️</span>
-          <span class="logo-text">Smart City Analytics</span>
+          <span class="logo-text">SmartPark</span>
+          <span class="logo-subtitle">Live CBD Parking</span>
         </div>
       </div>
-      <!-- Use data-tab for tab switching -->
-      <div class="nav-menu">
-        <a href="#" class="nav-link active" data-tab="parking">Parking Search</a>
-        <a href="#" class="nav-link" data-tab="analytics">Population Analytics</a>
-        <a href="#" class="nav-link" data-tab="about">About</a>
+      
+      <!-- Top Tab Navigation -->
+      <div class="top-nav-tabs">
+        <a href="#" class="top-tab active" data-tab="parking">
+          <span class="tab-icon">🔍</span>
+          Live Parking
+        </a>
+        <a href="#" class="top-tab" data-tab="analytics">
+          <span class="tab-icon">📊</span>
+          Crowd Analysis
+        </a>
+        <a href="#" class="top-tab" data-tab="about">
+          <span class="tab-icon">ℹ️</span>
+          About
+        </a>
+      </div>
+      
+      <div class="nav-actions">
+        <button class="live-data-btn">
+          <span class="live-indicator"></span>
+          Live Data
+        </button>
       </div>
     </nav>
   </header>
 
-  <!-- Main Content -->
-  <main class="main-container">
-    <div class="container">
-      <!-- Page Title -->
-      <div class="page-header">
-        <h1 class="page-title">Smart City Analytics</h1>
-        <p class="page-subtitle">Parking search and Melbourne population insights</p>
-      </div>
-
-      <!-- Function Tabs -->
-      <div class="function-tabs">
-        <button class="tab-button active" data-tab="parking">
-          <span class="tab-icon">📍</span>
-          Nearby Search
-        </button>
-        <button class="tab-button" data-tab="analytics">
-          <span class="tab-icon">📊</span>
-          Melbourne Population Analysis
-        </button>
-        <button class="tab-button" data-tab="about">
-            <span class="tab-icon">ℹ️</span>
-            About
-          </button>
-      </div>
-
-      
-      <!-- Parking Search -->
-      <div class="function-panel active" id="parking-panel">
-        <!-- Hero Section -->
-        <div class="hero-section">
-          <div class="hero-content">
-            <h1 class="hero-title">Find Parking in <span class="text-gradient">Melbourne CBD</span></h1>
-            <p class="hero-description">Real-time parking availability across Melbourne's Central Business District. Never circle the block again.</p>
-            
-            <div class="search-container">
-              <div class="search-input-wrapper">
-                <input
-                  type="text"
-                  id="location-input"
-                  placeholder="Enter street name (e.g., Collins Street, Bourke Street)"
-                  class="hero-search-input"
-                />
-                <button type="button" id="find-parking-btn" class="hero-search-btn">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                  </svg>
-                  Search
-                </button>
-              </div>
+<!-- Main Content -->
+<main class="main-container">
+  <div class="content-wrapper">
+    <!-- Parking Search -->
+    <div class="function-panel active" id="parking-panel">
+      <!-- Hero Section - Full Width -->
+      <div class="hero-section-fullwidth">
+        <div class="hero-content">
+          <h1 class="hero-title">Find Parking in <span class="text-gradient">Melbourne CBD</span></h1>
+          <p class="hero-description">Real-time parking availability across Melbourne's Central Business District. Never circle the block again.</p>
+          
+          <div class="search-container">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                id="location-input"
+                placeholder="Enter street name (e.g., Collins Street, Bourke Street)"
+                class="hero-search-input"
+              />
+              <button type="button" id="find-parking-btn" class="hero-search-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                Search
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
-        <!-- Features Section -->
-        <div class="features-section">
+      <!-- Features Section with Images -->
+      <div class="features-section">
+        <div class="container">
           <div class="features-grid">
             <div class="feature-card">
               <div class="feature-image">
-                <div class="feature-placeholder">
-                  <div class="feature-icon">🔍</div>
-                </div>
+                <img src="search.png" alt="Smart Search Feature" class="feature-img">
               </div>
               <div class="feature-content">
                 <h3 class="feature-title">Smart Search</h3>
@@ -102,9 +96,7 @@
 
             <div class="feature-card">
               <div class="feature-image">
-                <div class="feature-placeholder">
-                  <div class="feature-icon">🔄</div>
-                </div>
+                <img src="liveupdate.png" alt="Live Updates Feature" class="feature-img">
               </div>
               <div class="feature-content">
                 <h3 class="feature-title">Live Updates</h3>
@@ -114,18 +106,19 @@
 
             <div class="feature-card">
               <div class="feature-image">
-                <div class="feature-placeholder">
-                  <div class="feature-icon">🧭</div>
-                </div>
+                <img src="navigate.png" alt="Interactive Map Feature" class="feature-img">
               </div>
               <div class="feature-content">
-                <h3 class="feature-title">Navigate to Available Space</h3>
-                <p class="feature-description">Get direct navigation to confirmed parking spots</p>
+                <h3 class="feature-title">Interactive Map</h3>
+                <p class="feature-description">Visual map showing exact locations of available spots</p>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
+      <!-- Original Content Container -->
+      <div class="container">
         <!-- Loading State -->
         <div class="loading-state hidden" id="loading">
           <div class="spinner"></div>
@@ -145,27 +138,11 @@
           <p>Sorry, no parking spaces are currently available in your search area.</p>
         </div>
       </div>
+    </div>
 
-      <!-- Function 3: About -->
-        <div class="function-panel" id="about-panel">
-            <div class="about-section">
-            <h2>About Smart City Analytics</h2>
-            <p>
-                Smart City Analytics is a project designed to provide real-time parking data
-        and population analytics for Melbourne. Our goal is to improve urban mobility
-        and support better decision-making for residents, visitors, and city planners.
-            </p>
-            <p>
-        Data is collected from multiple open sources, processed and visualized in a
-        user-friendly interface to make urban information accessible for everyone.
-            </p>
-            </div>
-        </div>
-  
-
-
-      <!-- Population Analytics -->
-      <div class="function-panel" id="analytics-panel">
+    <!-- Population Analytics  -->
+    <div class="function-panel" id="analytics-panel">
+      <div class="container">
         <div class="analytics-section">
           <div class="analytics-header">
             <div class="header-content">
@@ -177,7 +154,7 @@
             </div>
           </div>
 
-          <!-- Filter Controls -->
+          <!-- Filter Controls - 保持原始 -->
           <div class="filter-controls">
             <div class="filter-group">
               <label for="from-year">From Year</label>
@@ -219,7 +196,7 @@
             <p>Filtered: <span id="filter-range">2016 - 2019</span></p>
           </div>
 
-          <!-- Charts -->
+          <!-- Charts  -->
           <div class="charts-container">
             <div class="chart-section">
               <h3>Estimated Resident Population by SA4 Areas</h3>
@@ -262,9 +239,28 @@
             </div> <!-- /chart-section -->
           </div> <!-- /charts-container -->
         </div> <!-- /analytics-section -->
-      </div> <!-- /analytics-panel -->
-    </div> <!-- /container -->
-  </main>
+      </div> <!-- /container -->
+    </div> <!-- /analytics-panel -->
+
+    <!-- About  -->
+    <div class="function-panel" id="about-panel">
+      <div class="container">
+        <div class="about-section">
+          <h2>About Smart City Analytics</h2>
+          <p>
+            Smart City Analytics is a project designed to provide real-time parking data
+            and population analytics for Melbourne. Our goal is to improve urban mobility
+            and support better decision-making for residents, visitors, and city planners.
+          </p>
+          <p>
+            Data is collected from multiple open sources, processed and visualized in a
+            user-friendly interface to make urban information accessible for everyone.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div> <!-- /content-wrapper -->
+</main>
 
   <!-- About (for #about anchor) -->
   <section id="about" class="footer">
