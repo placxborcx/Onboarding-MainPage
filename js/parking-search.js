@@ -162,18 +162,20 @@ function initializeParkingSearch() {
 
   // ---- Fetch (json helper) ----
   async function fetchJson(url, signal) {
-    const res = await fetch(url, { method: 'GET', signal });
-    let bodyText = null, bodyJson = null;
-    try { bodyJson = await res.json(); }
-    catch { bodyText = await res.text().catch(()=>null); }
-
-    if (!res.ok || bodyJson?.message || bodyJson?.error) {
-      console.error('[mapbox] request failed:', { url, status: res.status, body: bodyJson || bodyText });
-      const msg = (bodyJson && (bodyJson.message || bodyJson.error)) || bodyText || `HTTP ${res.status}`;
-      throw new Error(msg);
-    }
-  return bodyJson;
+  const res = await fetch(url, { method: 'GET', signal });
+  let body;
+  try { body = await res.json(); }
+  catch {
+    const text = await res.text().catch(()=> '');
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  // Only treat as error when truly error
+  if (!res.ok || body?.success === false || (typeof body?.error === 'string' && body.error)) {
+    throw new Error(body?.error || `HTTP ${res.status}`);
+  }
+  return body;
 }
+
 
   // ---- Mapbox suggest ----
   async function mapboxSuggest(q, {signal} = {}) {
@@ -229,38 +231,49 @@ function initializeParkingSearch() {
 
   // ---- Normalization: support both “grouped” and “flat” shapes ----
   function normalizeToBands(payload) {
-    if (payload && payload.results && !Array.isArray(payload.results)) {
-      return { bands: payload.results, center: payload.center || null };
-    }
-    const flat = Array.isArray(payload?.results) ? payload.results : [];
-    const bands = { within_100m:[], "100_to_200m":[], "200_to_500m":[], "500_to_1000m":[] };
-
-    for (const item of flat) {
-      const lat = item?.coordinates?.lat ?? item?.lat ?? null;
-      const lon = item?.coordinates?.lng ?? item?.lon ?? null;
-      const distM = toMeters(item?.distance);
-      if (lat == null || lon == null || distM == null) continue;
-
-      const bay = {
-        distance_m: distM,
-        lat: +lat, lon: +lon,
-        kerbsideid: item?.kerbsideid ?? null,
-        status_description: item?.status_description ?? item?.status ?? null,
-        status_timestamp: item?.status_timestamp ?? null,
-        lastupdated: item?.lastupdated ?? null,
-        zone_number: item?.zone_number ?? null
-      };
-
-      if (distM <= 100) bands.within_100m.push(bay);
-      else if (distM <= 200) bands["100_to_200m"].push(bay);
-      else if (distM <= 500) bands["200_to_500m"].push(bay);
-      else if (distM <= 1000) bands["500_to_1000m"].push(bay);
-    }
-
-    Object.keys(bands).forEach(k => bands[k].sort((a,b)=>a.distance_m-b.distance_m));
-    const center = payload?.center || null;
-    return { bands, center };
+  // If backend already grouped by distance
+  if (payload && payload.bands) {
+    return { bands: payload.bands, center: payload.center || null };
   }
+  // If already grouped in results object (older shape)
+  if (payload && payload.results && !Array.isArray(payload.results)) {
+    return { bands: payload.results, center: payload.center || null };
+  }
+
+  // Otherwise convert flat list -> bands (your original logic)
+  const flat = Array.isArray(payload?.results) ? payload.results : [];
+  const bands = {
+    within_100m:  [],
+    "100_to_200m": [],
+    "200_to_500m": [],
+    "500_to_1000m": []
+  };
+  for (const item of flat) {
+    const lat = item?.coordinates?.lat ?? item?.lat ?? null;
+    const lon = item?.coordinates?.lng ?? item?.lon ?? null;
+    const distM = toMeters(item?.distance) ?? item?.distance_m ?? null;
+    if (lat == null || lon == null || distM == null) continue;
+
+    const bay = {
+      distance_m: +distM,
+      lat: +lat,
+      lon: +lon,
+      kerbsideid: item?.kerbsideid ?? null,
+      status_description: item?.status_description ?? item?.status ?? null,
+      status_timestamp: item?.status_timestamp ?? null,
+      lastupdated: item?.lastupdated ?? null,
+      zone_number: item?.zone_number ?? null
+    };
+
+    if (bay.distance_m <= 100) bands.within_100m.push(bay);
+    else if (bay.distance_m <= 200) bands["100_to_200m"].push(bay);
+    else if (bay.distance_m <= 500) bands["200_to_500m"].push(bay);
+    else if (bay.distance_m <= 1000) bands["500_to_1000m"].push(bay);
+  }
+  Object.keys(bands).forEach(k => bands[k].sort((a,b)=>a.distance_m-b.distance_m));
+  return { bands, center: payload?.center || null };
+}
+
 
   function toMeters(distance) {
     if (distance == null) return null;
