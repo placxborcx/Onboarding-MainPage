@@ -182,24 +182,52 @@ function initializeParkingSearch() {
   // ---- Mapbox suggest ----
   async function mapboxSuggest(q, {signal} = {}) {
   const base = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`;
-  const params =
+  const common =
     `access_token=${MAPBOX_TOKEN}` +
-    `&autocomplete=true&limit=8` +
     `&country=AU` +
-    `&proximity=${SEARCH_CENTER.lon},${SEARCH_CENTER.lat}` + // bias to CBD
-    // NO bbox here (it was blocking many valid results)
-    `&types=address,poi,place,locality,neighborhood,postcode,district`;
+    `&proximity=${SEARCH_CENTER.lon},${SEARCH_CENTER.lat}` +
+    `&autocomplete=true&limit=10&language=en`;
 
-  const url = `${base}?${params}`;
-  const res = await fetch(url, { signal });
-  const data = await res.json();
-  if (!res.ok) {
-    console.error('[mapbox] suggest error', res.status, data);
-    throw new Error(data?.message || `HTTP ${res.status}`);
+  // Pass 1: POIs first (shops, venues, restaurants, etc.)
+  let url = `${base}?${common}&types=poi`;
+  let res = await fetch(url, { signal });
+  let data = await res.json();
+
+  // If nothing useful, Pass 2: also allow addresses/places
+  if (!res.ok || !(data.features || []).length) {
+    url = `${base}?${common}&types=poi,address,place,locality,neighborhood,postcode,district`;
+    res = await fetch(url, { signal });
+    data = await res.json();
+    if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
   }
 
-  const feats = data.features || [];
+  // Keep results inside ~Greater Melbourne
+  const feats = (data.features || []).filter(f => {
+    const [lon, lat] = f.center || [];
+    if (lat == null || lon == null) return false;
+    return km(SEARCH_CENTER.lat, SEARCH_CENTER.lon, lat, lon) <= MAX_RADIUS_KM;
+  });
 
+  // Re-rank: exact/near name matches first, then closeness to CBD
+  feats.sort((a,b) => {
+    const sa = scoreMatch(q, a);
+    const sb = scoreMatch(q, b);
+    if (sb !== sa) return sb - sa;
+    const da = km(SEARCH_CENTER.lat, SEARCH_CENTER.lon, a.center[1], a.center[0]);
+    const db = km(SEARCH_CENTER.lat, SEARCH_CENTER.lon, b.center[1], b.center[0]);
+    return da - db;
+  });
+
+  return feats.map(f => ({
+    id: f.id,
+    label: f.place_name,                  // full line
+    primary: f.text,                      // name only
+    secondary: extractCategory(f) || (f.context||[]).map(c=>c.text).join(" • "),
+    lat: f.center?.[1],
+    lon: f.center?.[0],
+    type: (f.place_type && f.place_type[0]) || 'poi'
+  }));
+}
   // Distance filter: keep results within ~Greater Melbourne and preferably in VIC
   function km(aLat, aLon, bLat, bLon) {
     const R = 6371, toRad = d => d * Math.PI/180;
