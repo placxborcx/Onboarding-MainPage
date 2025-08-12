@@ -177,45 +177,47 @@ function initializeParkingSearch() {
 
   // ---- Mapbox suggest ----
   async function mapboxSuggest(q, {signal} = {}) {
-  const url =
-    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json` +
-    `?access_token=${MAPBOX_TOKEN}` +                      // MUST be set
-    `&autocomplete=true&limit=8` +
-    `&country=AU&bbox=${MELB_BBOX.join(',')}` +            // minLon,minLat,maxLon,maxLat
-    `&proximity=144.9631,-37.8136` +                       // lon,lat (CBD)
-    `&types=address,poi,street,neighborhood,locality,place`;
+  const base = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json`;
+  const MELB_BBOX = [144.90, -37.86, 145.05, -37.76]; // minLon,minLat,maxLon,maxLat
 
-  try {
-    const data = await fetchJson(url, signal);
-    const feats = data.features || [];
-    const filtered = feats.filter(f => {
-      const ctx = f.context || [];
-      const hasMelb = /melbourne/i.test(f.place_name);
-      const hasVIC  = ctx.some(c=> /(victoria|vic)/i.test(c.text || c.short_code || ''));
-      const hasAU   = ctx.some(c=> /(australia|country\.au)/i.test(c.text || c.id || c.short_code || ''));
-      return hasMelb && hasVIC && hasAU;
-    });
-    return filtered.map(f => ({
-      id: f.id,
-      label: f.place_name,
-      primary: f.text,
-      secondary: (f.context||[]).map(c=>c.text).join(' • '),
-      lat: f.center?.[1],
-      lon: f.center?.[0],
-      type: (f.place_type && f.place_type[0]) || 'poi'
-    }));
-  } catch (e) {
-    console.warn('[mapbox] suggest failed, using local fallback:', e.message);
-    const LOCAL = [
-      { id:'melbcentral', label:'Melbourne Central, Melbourne VIC', primary:'Melbourne Central', secondary:'Melbourne • VIC', lat:-37.8105, lon:144.9620, type:'poi' },
-      { id:'flinders', label:'Flinders Street Station, Melbourne VIC', primary:'Flinders Street Station', secondary:'Melbourne • VIC', lat:-37.8183, lon:144.9671, type:'poi' },
-      { id:'fed', label:'Federation Square, Melbourne VIC', primary:'Federation Square', secondary:'Melbourne • VIC', lat:-37.8179, lon:144.9691, type:'poi' },
-      { id:'queenvic', label:'Queen Victoria Market, Melbourne VIC', primary:'Queen Victoria Market', secondary:'Melbourne • VIC', lat:-37.8079, lon:144.9568, type:'poi' }
-    ];
-    const v = q.toLowerCase();
-    return LOCAL.filter(x => x.label.toLowerCase().includes(v)).slice(0, 8);
+  const params =
+    `access_token=${MAPBOX_TOKEN}` +
+    `&autocomplete=true&limit=8` +
+    `&country=AU` +
+    `&proximity=144.9631,-37.8136` + // lon,lat (CBD)
+    `&bbox=${MELB_BBOX.join(',')}` +
+    // ✅ NO "street" here:
+    `&types=address,poi,place,locality,neighborhood,postcode,district`;
+
+  const url = `${base}?${params}`;
+  const res = await fetch(url, { signal });
+  const data = await res.json();
+
+  if (!res.ok) {
+    console.error('[mapbox] suggest error', res.status, data);
+    throw new Error(data?.message || `HTTP ${res.status}`);
   }
+
+  const feats = data.features || [];
+  const filtered = feats.filter(f => {
+    const ctx = f.context || [];
+    const hasMelb = /melbourne/i.test(f.place_name);
+    const hasVIC  = ctx.some(c=> /(victoria|vic)/i.test(c.text || c.short_code || ''));
+    const hasAU   = ctx.some(c=> /(australia|country\.au)/i.test(c.text || c.id || c.short_code || ''));
+    return hasMelb && hasVIC && hasAU;
+  });
+
+  return filtered.map(f => ({
+    id: f.id,
+    label: f.place_name,
+    primary: f.text,
+    secondary: (f.context||[]).map(c=>c.text).join(' • '),
+    lat: f.center?.[1],
+    lon: f.center?.[0],
+    type: (f.place_type && f.place_type[0]) || 'poi'
+  }));
 }
+
 
   function iconFor(type){
     if (type==='address') return '🏠';
