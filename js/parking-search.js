@@ -48,6 +48,20 @@ function initializeParkingSearch() {
     if (e.key === 'ArrowUp')   { e.preventDefault(); moveHighlight(-1); }
   });
 
+  function iconFor(type) {
+  switch (type) {
+    case 'address':     return '🏠';
+    case 'poi':         return '📍';
+    case 'place':
+    case 'locality':    return '🗺️';
+    case 'neighborhood':
+    case 'district':    return '🏙️';
+    case 'postcode':    return '🏷️';
+    default:            return '📌';
+  }
+}
+
+
   function moveHighlight(delta) {
     const n = dropdown.__items.length;
     dropdown.__hi = ((dropdown.__hi ?? -1) + delta + n) % n;
