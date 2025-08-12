@@ -17,7 +17,7 @@ function initializeParkingSearch() {
 
   // ---- Mapbox config (frontend-only autocomplete) ----
   const MAPBOX_TOKEN = "pk.eyJ1IjoibGVvbi0xMzIiLCJhIjoiY21lNmt3MDU5MHE1NzJzcHI3bnI4dnBuaiJ9.bGUrNp8xR2edF6INiJYwww";
-  const MELB_BBOX = [144.90, -37.86, 145.05, -37.76]; // minLon,minLat,maxLon,maxLat  (CBD-ish)
+  const MELB_BBOX = [144.80, -37.90, 145.20, -37.60]; // minLon,minLat,maxLon,maxLat  (CBD-ish)
   const REQUIRE_EXACT = true; // force user to choose from dropdown
   let chosen = null;          // the selected suggestion
 
