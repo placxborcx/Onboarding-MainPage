@@ -209,56 +209,57 @@
             <button type="button" id="reset-filters-btn" class="reset-btn">Reset Filters</button>
           </div>
 
-          <!-- Insight Header -->
-          <div class="insight-header">
-            <h3 id="insight-text">2016–2019, West grew the fastest (~31%), likely increasing parking pressure there. East grew the least (~8%), usually the safer bet for on-street parking.</h3>
-          </div>
-
-          <!-- KPI Cards -->
-          <div class="kpi-cards">
-            <div class="kpi-card growth-leader">
-              <div class="kpi-icon">🏆</div>
-              <div class="kpi-content">
-                <div class="kpi-label">Growth Leader</div>
-                <div class="kpi-value" id="growth-leader-text">West • +31%</div>
-                <div class="kpi-description">Expect higher parking pressure vs. others.</div>
-              </div>
-            </div>
-            <div class="kpi-card safer-bet">
-              <div class="kpi-icon">✅</div>
-              <div class="kpi-content">
-                <div class="kpi-label">Safer Bet</div>
-                <div class="kpi-value" id="safer-bet-text">East • +8%</div>
-                <div class="kpi-description">Usually easier to find a spot.</div>
-              </div>
+          <!-- Trend Chart (Always visible) -->
+          <div class="chart-section">
+            <h3>Population Trend by Area</h3>
+            <p>Population distribution over time for selected year range and regions</p>
+            <div class="chart-wrapper">
+              <canvas id="population-bar-chart"></canvas>
             </div>
           </div>
 
-          <!-- Parking Outlook -->
-          <div class="parking-outlook">
-            <h3>Parking Outlook – Ranked by Growth</h3>
-            <div class="outlook-list" id="outlook-list">
-              <!-- Dynamically populated -->
-            </div>
-            <div class="tip-bar">
-              💡 Population growth is a long-term demand signal. If supply is flat, faster growth = tighter curb space.
-            </div>
-          </div>
-
-          <!-- Collapsible Charts Section -->
-          <div class="charts-toggle">
-            <button type="button" id="charts-toggle-btn" class="charts-toggle-btn">
-              <span>Show trend details</span>
+          <!-- Collapsible Analysis Section -->
+          <div class="analysis-toggle">
+            <button type="button" id="analysis-toggle-btn" class="analysis-toggle-btn">
+              <span>Show detailed analysis</span>
               <span class="toggle-icon">▼</span>
             </button>
           </div>
 
-          <div class="charts-container collapsed" id="charts-container">
-            <div class="chart-section">
-              <h3>Population Trend by Area</h3>
-              <p>Population distribution over time</p>
-              <div class="chart-wrapper">
-                <canvas id="population-bar-chart"></canvas>
+          <div class="analysis-container collapsed" id="analysis-container">
+            <!-- Insight Header -->
+            <div class="insight-header">
+              <h3 id="insight-text">2016–2019, West grew the fastest (~31%), likely increasing parking pressure there. East grew the least (~8%), usually the safer bet for on-street parking.</h3>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-cards">
+              <div class="kpi-card growth-leader">
+                <div class="kpi-icon">🏆</div>
+                <div class="kpi-content">
+                  <div class="kpi-label">Growth Leader</div>
+                  <div class="kpi-value" id="growth-leader-text">West • +31%</div>
+                  <div class="kpi-description">Expect higher parking pressure vs. others.</div>
+                </div>
+              </div>
+              <div class="kpi-card safer-bet">
+                <div class="kpi-icon">✅</div>
+                <div class="kpi-content">
+                  <div class="kpi-label">Safer Bet</div>
+                  <div class="kpi-value" id="safer-bet-text">East • +8%</div>
+                  <div class="kpi-description">Usually easier to find a spot.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Parking Outlook -->
+            <div class="parking-outlook">
+              <h3 id="outlook-title">Parking Outlook – Ranked by Growth</h3>
+              <div class="outlook-list" id="outlook-list">
+                <!-- Dynamically populated -->
+              </div>
+              <div class="tip-bar">
+                💡 Population growth is a long-term demand signal. If supply is flat, faster growth = tighter curb space.
               </div>
             </div>
           </div>

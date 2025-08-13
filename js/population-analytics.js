@@ -1,5 +1,405 @@
-// Population Analytics (Chart.js) — CBD East/North/West via JSON (robust w/ legacy IDs)
-// Population Analytics - version 0814 - Updated for Parking Outlook
+// Population Analytics - version 0814 - Parking Outlook Focus
+(function () {
+  'use strict';
+
+  let charts = { trend: null };
+  let rawData = null;
+  let initialized = false;
+  let selectedRegions = new Set(['CBD - East', 'CBD - North', 'CBD - West']);
+
+  // Mock data for CBD areas
+  const mockData = {
+    regions: {
+      'CBD - East': {
+        population: [89000, 91000, 93000, 95000, 97000, 99000, 101000, 103000, 105000, 107000, 109000]
+      },
+      'CBD - North': {
+        population: [95000, 98000, 101000, 104000, 107000, 110000, 113000, 116000, 119000, 122000, 125000]
+      },
+      'CBD - West': {
+        population: [78000, 81000, 84000, 87000, 90000, 93000, 96000, 99000, 102000, 105000, 108000]
+      }
+    },
+    years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021]
+  };
+
+  // Public API
+  window.PopulationAnalytics = { ensureInitialized };
+
+  // Main initialization
+  window.initializePopulationAnalytics = function () {
+    rawData = mockData;
+    setupEventListeners();
+    setupYearValidation();
+    console.log('✅ Population analytics initialized');
+  };
+
+  function setupEventListeners() {
+    const applyBtn = document.getElementById('apply-filters-btn');
+    const resetBtn = document.getElementById('reset-filters-btn');
+    const toggleBtn = document.getElementById('analysis-toggle-btn');
+    const regionCheckboxes = document.querySelectorAll('.region-checkboxes input[type="checkbox"]');
+
+    applyBtn?.addEventListener('click', handleApplyFilters);
+    resetBtn?.addEventListener('click', handleResetFilters);
+    toggleBtn?.addEventListener('click', handleToggleAnalysis);
+    
+    regionCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', handleRegionChange);
+    });
+  }
+
+  function setupYearValidation() {
+    const fromYearSelect = document.getElementById('from-year');
+    const toYearSelect = document.getElementById('to-year');
+
+    fromYearSelect?.addEventListener('change', function() {
+      const fromYear = parseInt(this.value);
+      const toYear = parseInt(toYearSelect.value);
+      
+      if (fromYear > toYear) {
+        toYearSelect.value = this.value;
+      }
+      
+      // Update to-year options
+      updateToYearOptions(fromYear);
+    });
+
+    toYearSelect?.addEventListener('change', function() {
+      const toYear = parseInt(this.value);
+      const fromYear = parseInt(fromYearSelect.value);
+      
+      if (toYear < fromYear) {
+        fromYearSelect.value = this.value;
+      }
+      
+      // Update from-year options
+      updateFromYearOptions(toYear);
+    });
+  }
+
+  function updateToYearOptions(fromYear) {
+    const toYearSelect = document.getElementById('to-year');
+    if (!toYearSelect) return;
+
+    const options = toYearSelect.querySelectorAll('option');
+    options.forEach(option => {
+      const year = parseInt(option.value);
+      option.disabled = year < fromYear;
+    });
+  }
+
+  function updateFromYearOptions(toYear) {
+    const fromYearSelect = document.getElementById('from-year');
+    if (!fromYearSelect) return;
+
+    const options = fromYearSelect.querySelectorAll('option');
+    options.forEach(option => {
+      const year = parseInt(option.value);
+      option.disabled = year > toYear;
+    });
+  }
+
+  function handleRegionChange() {
+    const checkboxes = document.querySelectorAll('.region-checkboxes input[type="checkbox"]');
+    selectedRegions.clear();
+    checkboxes.forEach(cb => {
+      if (cb.checked) selectedRegions.add(cb.value);
+    });
+  }
+
+  function handleApplyFilters() {
+    const { fromYear, toYear } = getYearRange();
+    
+    if (selectedRegions.size === 0) {
+      alert('Please select at least one region');
+      return;
+    }
+
+    updateAnalysis();
+    updateChart();
+  }
+
+  function handleResetFilters() {
+    // Reset year range
+    const fromYearSelect = document.getElementById('from-year');
+    const toYearSelect = document.getElementById('to-year');
+    if (fromYearSelect) fromYearSelect.value = '2016';
+    if (toYearSelect) toYearSelect.value = '2019';
+    
+    // Reset regions
+    selectedRegions = new Set(['CBD - East', 'CBD - North', 'CBD - West']);
+    syncRegionCheckboxes();
+    
+    // Re-enable all options
+    resetYearOptions();
+    
+    // Update display
+    updateAnalysis();
+    updateChart();
+  }
+
+  function resetYearOptions() {
+    const fromYearSelect = document.getElementById('from-year');
+    const toYearSelect = document.getElementById('to-year');
+    
+    [fromYearSelect, toYearSelect].forEach(select => {
+      if (select) {
+        select.querySelectorAll('option').forEach(option => {
+          option.disabled = false;
+        });
+      }
+    });
+  }
+
+  function handleToggleAnalysis() {
+    const container = document.getElementById('analysis-container');
+    const btn = document.getElementById('analysis-toggle-btn');
+    const icon = btn?.querySelector('.toggle-icon');
+    const text = btn?.querySelector('span:first-child');
+    
+    if (container?.classList.contains('collapsed')) {
+      container.classList.remove('collapsed');
+      container.classList.add('expanded');
+      if (icon) icon.textContent = '▲';
+      if (text) text.textContent = 'Hide detailed analysis';
+    } else if (container) {
+      container.classList.add('collapsed');
+      container.classList.remove('expanded');
+      if (icon) icon.textContent = '▼';
+      if (text) text.textContent = 'Show detailed analysis';
+    }
+  }
+
+  function ensureInitialized() {
+    if (initialized || !rawData) return;
+    
+    // Initialize with default values
+    updateAnalysis();
+    updateChart();
+    initialized = true;
+  }
+
+  function updateAnalysis() {
+    const { fromYear, toYear } = getYearRange();
+    const analysisData = calculateAnalysisData(fromYear, toYear);
+    
+    updateInsightHeader(analysisData, fromYear, toYear);
+    updateKPICards(analysisData);
+    updateOutlookList(analysisData, fromYear, toYear);
+  }
+
+  function updateChart() {
+    const { fromYear, toYear } = getYearRange();
+    const chartData = prepareChartData(fromYear, toYear);
+    initTrendChart(chartData);
+  }
+
+  function calculateAnalysisData(fromYear, toYear) {
+    const startIdx = rawData.years.indexOf(fromYear);
+    const endIdx = rawData.years.indexOf(toYear);
+    
+    const growthData = [];
+    
+    [...selectedRegions].forEach(region => {
+      if (rawData.regions[region]) {
+        const series = rawData.regions[region].population;
+        const startPop = series[startIdx];
+        const endPop = series[endIdx];
+        const growthPct = startPop ? ((endPop - startPop) / startPop) * 100 : 0;
+        
+        growthData.push({
+          area: region,
+          growth: Math.round(growthPct * 10) / 10,
+          startPop,
+          endPop
+        });
+      }
+    });
+    
+    // Sort by growth descending
+    growthData.sort((a, b) => b.growth - a.growth);
+    
+    return growthData;
+  }
+
+  function prepareChartData(fromYear, toYear) {
+    const startIdx = rawData.years.indexOf(fromYear);
+    const endIdx = rawData.years.indexOf(toYear);
+    const years = rawData.years.slice(startIdx, endIdx + 1);
+    
+    const datasets = [...selectedRegions].map((region, i) => {
+      const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
+      const series = rawData.regions[region].population.slice(startIdx, endIdx + 1);
+      
+      return {
+        label: region,
+        data: series,
+        borderColor: colors[i % colors.length],
+        backgroundColor: 'transparent',
+        borderWidth: 3,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBorderWidth: 2,
+        pointBackgroundColor: '#ffffff',
+        pointBorderColor: colors[i % colors.length]
+      };
+    });
+    
+    return { years, datasets };
+  }
+
+  function updateInsightHeader(analysisData, fromYear, toYear) {
+    const element = document.getElementById('insight-text');
+    if (!element || !analysisData.length) return;
+    
+    const fastest = analysisData[0];
+    const slowest = analysisData[analysisData.length - 1];
+    
+    const text = `${fromYear}–${toYear}, ${fastest.area} grew the fastest (~${fastest.growth}%), likely increasing parking pressure there. ${slowest.area} grew the least (~${slowest.growth}%), usually the safer bet for on-street parking.`;
+    
+    element.textContent = text;
+  }
+
+  function updateKPICards(analysisData) {
+    const leaderEl = document.getElementById('growth-leader-text');
+    const saferEl = document.getElementById('safer-bet-text');
+    
+    if (!analysisData.length) return;
+    
+    const fastest = analysisData[0];
+    const slowest = analysisData[analysisData.length - 1];
+    
+    if (leaderEl) leaderEl.textContent = `${fastest.area} • +${fastest.growth}%`;
+    if (saferEl) saferEl.textContent = `${slowest.area} • +${slowest.growth}%`;
+  }
+
+  function updateOutlookList(analysisData, fromYear, toYear) {
+    const container = document.getElementById('outlook-list');
+    const titleEl = document.getElementById('outlook-title');
+    
+    if (titleEl) {
+      titleEl.textContent = `Parking Outlook – Ranked by Growth (${fromYear}–${toYear})`;
+    }
+    
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    analysisData.forEach(item => {
+      const badge = getOutlookBadge(item.growth);
+      const tip = getActionableTip(item.growth);
+      
+      const div = document.createElement('div');
+      div.className = 'outlook-item';
+      div.innerHTML = `
+        <div class="outlook-area">${item.area}</div>
+        <div class="outlook-growth">~${item.growth}%</div>
+        <div class="outlook-badge ${badge.class}">${badge.text}</div>
+        <div class="outlook-tip">${tip}</div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  function getOutlookBadge(growth) {
+    if (growth > 20) return { class: 'high', text: 'High' };
+    if (growth >= 10) return { class: 'medium', text: 'Medium' };
+    return { class: 'low', text: 'Low' };
+  }
+
+  function getActionableTip(growth) {
+    if (growth > 20) return 'Arrive earlier or consider a nearby area';
+    if (growth >= 10) return 'Avoid typical commute peaks';
+    return 'Best chance for curb parking';
+  }
+
+  function initTrendChart(chartData) {
+    const ctx = document.getElementById('population-bar-chart');
+    if (!ctx) return;
+    
+    if (charts.trend) {
+      charts.trend.destroy();
+    }
+    
+    charts.trend = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: chartData.years,
+        datasets: chartData.datasets
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              boxWidth: 12,
+              padding: 15,
+              font: { size: 11 }
+            }
+          },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            titleColor: '#fff',
+            bodyColor: '#fff',
+            borderColor: '#6366f1',
+            borderWidth: 1,
+            cornerRadius: 8,
+            callbacks: {
+              label: function(context) {
+                return `${context.dataset.label}: ${context.parsed.y.toLocaleString()}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              text: 'Year'
+            },
+            grid: {
+              display: false
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: 'Population'
+            },
+            ticks: {
+              callback: function(value) {
+                return (value / 1000) + 'k';
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function getYearRange() {
+    const fromYear = parseInt(document.getElementById('from-year')?.value || '2016', 10);
+    const toYear = parseInt(document.getElementById('to-year')?.value || '2019', 10);
+    return { fromYear, toYear };
+  }
+
+  function syncRegionCheckboxes() {
+    const checkboxes = document.querySelectorAll('.region-checkboxes input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      cb.checked = selectedRegions.has(cb.value);
+    });
+  }
+
+})();
+
+/* version 0814 (if latest work, than delete this one)
 (function () {
   'use strict';
 
@@ -287,6 +687,8 @@
     });
   }
 })();
+
+*/
 
 /* 0814 backup previous version
 (function () {
