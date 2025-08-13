@@ -1,4 +1,294 @@
 // Population Analytics (Chart.js) — CBD East/North/West via JSON (robust w/ legacy IDs)
+// Population Analytics - version 0814 - Updated for Parking Outlook
+(function () {
+  'use strict';
+
+  const charts = { trend: null };
+  let rawData = null;
+  let initialized = false;
+  let selectedRegions = new Set(['CBD - East', 'CBD - North', 'CBD - West']);
+
+  // Mock data for demonstration
+  const mockData = {
+    regions: {
+      'CBD - East': {
+        population: [89000, 91000, 93000, 95000, 97000, 99000, 101000, 103000, 105000, 107000, 109000],
+        density_2021: 12500
+      },
+      'CBD - North': {
+        population: [95000, 98000, 101000, 104000, 107000, 110000, 113000, 116000, 119000, 122000, 125000],
+        density_2021: 13200
+      },
+      'CBD - West': {
+        population: [78000, 81000, 84000, 87000, 90000, 93000, 96000, 99000, 102000, 105000, 108000],
+        density_2021: 11800
+      }
+    },
+    years: [2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021]
+  };
+
+  // Public API
+  window.PopulationAnalytics = { ensureInitialized };
+
+  // Main initialization function
+  window.initializePopulationAnalytics = function () {
+    setupEventListeners();
+    rawData = mockData; // Use mock data for now
+    console.log('✅ Population analytics initialized with mock data');
+  };
+
+  function setupEventListeners() {
+    const applyBtn = document.getElementById('apply-filters-btn');
+    const resetBtn = document.getElementById('reset-filters-btn');
+    const toggleBtn = document.getElementById('charts-toggle-btn');
+    const regionCheckboxes = document.querySelectorAll('.region-checkboxes input[type="checkbox"]');
+
+    applyBtn?.addEventListener('click', handleApplyFilters);
+    resetBtn?.addEventListener('click', handleResetFilters);
+    toggleBtn?.addEventListener('click', handleToggleCharts);
+    
+    regionCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', handleRegionChange);
+    });
+  }
+
+  function handleRegionChange() {
+    const checkboxes = document.querySelectorAll('.region-checkboxes input[type="checkbox"]');
+    selectedRegions.clear();
+    checkboxes.forEach(cb => {
+      if (cb.checked) selectedRegions.add(cb.value);
+    });
+  }
+
+  function handleApplyFilters() {
+    const { fromYear, toYear } = getYearRange();
+    if (fromYear > toYear) {
+      alert('From Year cannot be later than To Year');
+      return;
+    }
+    
+    const filtered = buildFilteredData(rawData, fromYear, toYear, [...selectedRegions]);
+    updateAnalysis(filtered, fromYear, toYear);
+  }
+
+  function handleResetFilters() {
+    setYearRange(2016, 2019);
+    selectedRegions = new Set(['CBD - East', 'CBD - North', 'CBD - West']);
+    syncRegionCheckboxes();
+    
+    const filtered = buildFilteredData(rawData, 2016, 2019, [...selectedRegions]);
+    updateAnalysis(filtered, 2016, 2019);
+  }
+
+  function handleToggleCharts() {
+    const container = document.getElementById('charts-container');
+    const icon = document.querySelector('.toggle-icon');
+    
+    if (container.classList.contains('collapsed')) {
+      container.classList.remove('collapsed');
+      container.classList.add('expanded');
+      icon.textContent = '▲';
+      
+      // Initialize chart if not already done
+      if (!charts.trend && rawData) {
+        const { fromYear, toYear } = getYearRange();
+        const filtered = buildFilteredData(rawData, fromYear, toYear, [...selectedRegions]);
+        initTrendChart(filtered);
+      }
+    } else {
+      container.classList.add('collapsed');
+      container.classList.remove('expanded');
+      icon.textContent = '▼';
+    }
+  }
+
+  function ensureInitialized() {
+    if (initialized || !rawData) return;
+    
+    const { fromYear, toYear } = getYearRange();
+    const filtered = buildFilteredData(rawData, fromYear, toYear, [...selectedRegions]);
+    updateAnalysis(filtered, fromYear, toYear);
+    
+    initialized = true;
+  }
+
+  // Data processing functions
+  function buildFilteredData(data, fromYear, toYear, regions) {
+    const s = data.years.indexOf(fromYear);
+    const e = data.years.indexOf(toYear);
+    const valid = (s !== -1 && e !== -1 && s <= e);
+    
+    const years = valid ? data.years.slice(s, e + 1) : data.years.slice();
+    const growthData = [];
+    
+    regions.forEach(region => {
+      if (data.regions[region]) {
+        const series = data.regions[region].population;
+        const subset = valid ? series.slice(s, e + 1) : series.slice();
+        const first = subset[0];
+        const last = subset[subset.length - 1];
+        const growthPct = first ? ((last - first) / first) * 100 : 0;
+        
+        growthData.push({
+          area: region,
+          growth: Math.round(growthPct * 10) / 10,
+          first: first,
+          last: last
+        });
+      }
+    });
+    
+    // Sort by growth descending
+    growthData.sort((a, b) => b.growth - a.growth);
+    
+    return { years, growthData, regions };
+  }
+
+  function updateAnalysis(data, fromYear, toYear) {
+    updateInsightHeader(data, fromYear, toYear);
+    updateKPICards(data);
+    updateOutlookList(data);
+    
+    // Update chart if expanded
+    const container = document.getElementById('charts-container');
+    if (!container.classList.contains('collapsed') && rawData) {
+      initTrendChart(data);
+    }
+  }
+
+  function updateInsightHeader(data, fromYear, toYear) {
+    const element = document.getElementById('insight-text');
+    if (!element || !data.growthData.length) return;
+    
+    const fastest = data.growthData[0];
+    const slowest = data.growthData[data.growthData.length - 1];
+    
+    const text = `${fromYear}–${toYear}, ${fastest.area} grew the fastest (~${fastest.growth}%), likely increasing parking pressure there. ${slowest.area} grew the least (~${slowest.growth}%), usually the safer bet for on-street parking.`;
+    
+    element.textContent = text;
+  }
+
+  function updateKPICards(data) {
+    const leaderEl = document.getElementById('growth-leader-text');
+    const saferEl = document.getElementById('safer-bet-text');
+    
+    if (!data.growthData.length) return;
+    
+    const fastest = data.growthData[0];
+    const slowest = data.growthData[data.growthData.length - 1];
+    
+    if (leaderEl) leaderEl.textContent = `${fastest.area} • +${fastest.growth}%`;
+    if (saferEl) saferEl.textContent = `${slowest.area} • +${slowest.growth}%`;
+  }
+
+  function updateOutlookList(data) {
+    const container = document.getElementById('outlook-list');
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    data.growthData.forEach(item => {
+      const badge = getOutlookBadge(item.growth);
+      const tip = getActionableTip(item.growth, item.area);
+      
+      const div = document.createElement('div');
+      div.className = 'outlook-item';
+      div.innerHTML = `
+        <div class="outlook-area">${item.area}</div>
+        <div class="outlook-growth">~${item.growth}%</div>
+        <div class="outlook-badge ${badge.class}">${badge.text}</div>
+        <div class="outlook-tip">${tip}</div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  function getOutlookBadge(growth) {
+    if (growth > 20) return { class: 'high', text: 'High' };
+    if (growth >= 10) return { class: 'medium', text: 'Medium' };
+    return { class: 'low', text: 'Low' };
+  }
+
+  function getActionableTip(growth, area) {
+    if (growth > 20) return 'Arrive earlier or consider a nearby area';
+    if (growth >= 10) return 'Avoid typical commute peaks';
+    return 'Best chance for curb parking';
+  }
+
+  // Chart functions
+  function initTrendChart(data) {
+    const ctx = document.getElementById('population-bar-chart');
+    if (!ctx) return;
+    
+    charts.trend?.destroy();
+    
+    const datasets = data.regions.map((region, i) => {
+      const colors = ['#6366f1', '#10b981', '#f59e0b'];
+      const series = rawData.regions[region].population;
+      const s = rawData.years.indexOf(data.years[0]);
+      const e = rawData.years.indexOf(data.years[data.years.length - 1]);
+      const subset = (s !== -1 && e !== -1) ? series.slice(s, e + 1) : series.slice();
+      
+      return {
+        label: region,
+        data: subset,
+        borderColor: colors[i % colors.length],
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        tension: 0.35,
+        pointRadius: 3
+      };
+    });
+    
+    charts.trend = new Chart(ctx, {
+      type: 'line',
+      data: { labels: data.years, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { 
+            callbacks: { 
+              label: c => `${c.dataset.label}: ${c.parsed.y.toLocaleString()}` 
+            } 
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Year' }, grid: { display: false } },
+          y: { 
+            title: { display: true, text: 'Population' }, 
+            ticks: { callback: v => (v/1000)+'k' } 
+          }
+        }
+      }
+    });
+  }
+
+  // Utility functions
+  function getYearRange() {
+    const fromYear = parseInt(document.getElementById('from-year')?.value ?? '2016', 10);
+    const toYear = parseInt(document.getElementById('to-year')?.value ?? '2019', 10);
+    return { fromYear, toYear };
+  }
+
+  function setYearRange(from, to) {
+    const fromEl = document.getElementById('from-year');
+    const toEl = document.getElementById('to-year');
+    if (fromEl) fromEl.value = String(from);
+    if (toEl) toEl.value = String(to);
+  }
+
+  function syncRegionCheckboxes() {
+    const checkboxes = document.querySelectorAll('.region-checkboxes input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      cb.checked = selectedRegions.has(cb.value);
+    });
+  }
+})();
+
+/* 0814 backup previous version
 (function () {
   'use strict';
 
@@ -334,6 +624,9 @@
     if (yearsEl)  yearsEl.textContent  = yearsAnalyzed;
   }
 })();
+
+*/
+
 
 /*
 // Population analytics: data, filters, and Chart.js rendering

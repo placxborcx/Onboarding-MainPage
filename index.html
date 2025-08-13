@@ -146,15 +146,15 @@
         <div class="analytics-section">
           <div class="analytics-header">
             <div class="header-content">
-              <div class="header-icon">👥</div>
+              <div class="header-icon">🚗</div>
               <div class="header-text">
-                <h2>Melbourne CBD Population Analysis (2011-2021)</h2>
-                <p>Interactive visualization of population growth across Melbourne's Statistical Areas Level 4 (SA4)</p>
+                <h2>Population → Parking Outlook</h2>
+                <p>Population growth is a long-term parking demand signal. Higher growth = tighter curb space when supply is unchanged.</p>
               </div>
             </div>
           </div>
 
-          <!-- Filter Controls - 保持原始 -->
+          <!-- Filter Controls -->
           <div class="filter-controls">
             <div class="filter-group">
               <label for="from-year">From Year</label>
@@ -188,59 +188,84 @@
                 <option value="2021">2021</option>
               </select>
             </div>
+            
+            <!-- Region Filter -->
+            <div class="filter-group">
+              <label>Regions</label>
+              <div class="region-checkboxes">
+                <label class="checkbox-label">
+                  <input type="checkbox" value="CBD - East" checked> CBD - East
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" value="CBD - North" checked> CBD - North
+                </label>
+                <label class="checkbox-label">
+                  <input type="checkbox" value="CBD - West" checked> CBD - West
+                </label>
+              </div>
+            </div>
+            
             <button type="button" id="apply-filters-btn" class="apply-btn">Apply Filters</button>
             <button type="button" id="reset-filters-btn" class="reset-btn">Reset Filters</button>
           </div>
 
-          <div class="filter-info">
-            <p>Filtered: <span id="filter-range">2016 - 2019</span></p>
+          <!-- Insight Header -->
+          <div class="insight-header">
+            <h3 id="insight-text">2016–2019, West grew the fastest (~31%), likely increasing parking pressure there. East grew the least (~8%), usually the safer bet for on-street parking.</h3>
           </div>
 
-          <!-- Charts  -->
-          <div class="charts-container">
+          <!-- KPI Cards -->
+          <div class="kpi-cards">
+            <div class="kpi-card growth-leader">
+              <div class="kpi-icon">🏆</div>
+              <div class="kpi-content">
+                <div class="kpi-label">Growth Leader</div>
+                <div class="kpi-value" id="growth-leader-text">West • +31%</div>
+                <div class="kpi-description">Expect higher parking pressure vs. others.</div>
+              </div>
+            </div>
+            <div class="kpi-card safer-bet">
+              <div class="kpi-icon">✅</div>
+              <div class="kpi-content">
+                <div class="kpi-label">Safer Bet</div>
+                <div class="kpi-value" id="safer-bet-text">East • +8%</div>
+                <div class="kpi-description">Usually easier to find a spot.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Parking Outlook -->
+          <div class="parking-outlook">
+            <h3>Parking Outlook – Ranked by Growth</h3>
+            <div class="outlook-list" id="outlook-list">
+              <!-- Dynamically populated -->
+            </div>
+            <div class="tip-bar">
+              💡 Population growth is a long-term demand signal. If supply is flat, faster growth = tighter curb space.
+            </div>
+          </div>
+
+          <!-- Collapsible Charts Section -->
+          <div class="charts-toggle">
+            <button type="button" id="charts-toggle-btn" class="charts-toggle-btn">
+              <span>Show trend details</span>
+              <span class="toggle-icon">▼</span>
+            </button>
+          </div>
+
+          <div class="charts-container collapsed" id="charts-container">
             <div class="chart-section">
-              <h3>Estimated Resident Population by SA4 Areas</h3>
-              <p>Population distribution across Melbourne's SA4</p>
+              <h3>Population Trend by Area</h3>
+              <p>Population distribution over time</p>
               <div class="chart-wrapper">
                 <canvas id="population-bar-chart"></canvas>
               </div>
             </div>
+          </div>
 
-            <div class="chart-section">
-              <h3>Overall Population Growth Trend</h3>
-              <p>Percentage change in total Melbourne population year-over-year</p>
-              <div class="chart-wrapper">
-                <canvas id="population-line-chart"></canvas>
-              </div>
-
-              <div class="stats-cards">
-                <div class="stat-card">
-                  <div class="stat-icon">👥</div>
-                  <div class="stat-content">
-                    <div class="stat-label">Total Population (2021)</div>
-                    <div class="stat-value" id="total-population">4,026,100</div>
-                  </div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-icon">📈</div>
-                  <div class="stat-content">
-                    <div class="stat-label">Avg. Annual Growth</div>
-                    <div class="stat-value growth" id="avg-growth">2.3%</div>
-                  </div>
-                </div>
-                <div class="stat-card">
-                  <div class="stat-icon">📊</div>
-                  <div class="stat-content">
-                    <div class="stat-label">Years Analyzed</div>
-                    <div class="stat-value" id="years-analyzed">6</div>
-                  </div>
-                </div>
-              </div>
-            </div> <!-- /chart-section -->
-          </div> <!-- /charts-container -->
-        </div> <!-- /analytics-section -->
-      </div> <!-- /container -->
-    </div> <!-- /analytics-panel -->
+        </div>
+      </div>
+    </div>
 
     <!-- About  -->
     <div class="function-panel" id="about-panel">
