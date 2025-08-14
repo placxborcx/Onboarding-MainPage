@@ -531,10 +531,8 @@ function initializeParkingSearch() {
       </div>
       <div class="parking-details">
         <div class="parking-info">
-          <div class="info-item"><span>🕒</span><span>${formatTime(bay.status_timestamp || bay.lastupdated)}</span></div>
           <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
           <div class="info-item"><span>🧭</span><span>${zoneLabel}</span></div>
-          <div class="info-item"><span>⏳</span><span>${maxStayText}</span></div>
         </div>
         <div class="parking-badges">
           ${meterBadge}
