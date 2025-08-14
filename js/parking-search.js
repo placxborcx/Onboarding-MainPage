@@ -140,6 +140,11 @@ function initializeParkingSearch() {
     inFlight = new AbortController();
 
     hideAllStates();
+    // Hide features section when search starts
+    const featuresSection = document.querySelector('.features-section');
+    if (featuresSection) {
+        featuresSection.style.display = 'none';
+    }
     loadingState.classList.remove('hidden');
 
     try {
@@ -182,6 +187,12 @@ function initializeParkingSearch() {
     resultsSection.classList.add('hidden');
     noResults.classList.add('hidden');
     if (parkingList) parkingList.innerHTML = '';
+
+    // Show features section when clearing results
+    const featuresSection = document.querySelector('.features-section');
+    if (featuresSection) {
+        featuresSection.style.display = 'block';
+    }
   }
 
   // ---- Fetch helper ----

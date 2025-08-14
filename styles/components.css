@@ -434,11 +434,17 @@
   max-height:280px;overflow:auto;background:#fff;border:1px solid #e8e8ef;border-radius:10px;
   box-shadow:0 10px 24px rgba(0,0,0,.07)}
 .ac-hidden{display:none}
-.ac-item{display:flex;gap:10px;padding:10px 12px;cursor:pointer}
+.ac-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    color: var(--text-primary); /* font color black */
+}
 .ac-item:hover,.ac-active{background:#f2f5ff}
 .ac-ico{width:22px;text-align:center;opacity:.85}
-.ac-title{font-weight:600}
-.ac-sub{font-size:12px;color:#666}
+.ac-title{font-weight:600; color: var(--text-primary);} /* font color black */
+.ac-sub{font-size:12px; color: var(--text-secondary);}
 .pill{display:inline-block;padding:.1rem .5rem;border-radius:999px;background:#eef3ff;color:#334;
   font-size:.75rem;margin-left:.25rem}
 
@@ -1130,4 +1136,18 @@
     .outlook-item > * {
         justify-self: start;
     }
+}
+
+/* add Key Feature section */
+
+.section-header {
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+.section-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
 }
