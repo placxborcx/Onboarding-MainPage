@@ -1159,3 +1159,8 @@
 #about-panel {
     min-height: calc(100vh - 120px); 
   }
+
+/* add for distance badge */
+.parking-availability.success { background-color: var(--success-color); }
+.parking-availability.danger  { background-color: var(--danger-color); }
+  

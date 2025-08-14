@@ -287,7 +287,82 @@ function initializeParkingSearch() {
     return Array.isArray(cats) ? cats.join(", ") : (cats || "");
   }
 
+
   // ---- Normalization ----
+  function normalizeToBands(payload) {
+    
+    if (payload && payload.bands) {
+      return { bands: payload.bands, center: payload.center || null };
+    }
+    if (payload && payload.results && !Array.isArray(payload.results)) {
+      return { bands: payload.results, center: payload.center || null };
+    }
+
+   
+    const flat = Array.isArray(payload?.results)
+      ? payload.results
+      : (Array.isArray(payload) ? payload : []);
+
+    const bands = {
+      within_100m: [],
+      "100_to_200m": [],
+      "200_to_500m": [],
+      "500_to_1000m": []
+    };
+
+    for (const item of flat) {
+      const lat   = item?.coordinates?.lat ?? item?.lat ?? null;
+      const lon   = item?.coordinates?.lng ?? item?.lon ?? null;
+      const distM = toMeters(item?.distance) ?? item?.distance_m ?? null;
+      if (lat == null || lon == null || distM == null) continue;
+
+     
+      const available = (typeof item?.availableSpaces === 'number') ? item.availableSpaces : null;
+      const total     = (typeof item?.totalSpaces === 'number') ? item.totalSpaces : null;
+
+      
+      let status = null;
+      if (available != null) {
+        status = available > 0 ? 'unoccupied' : 'occupied';
+      } else {
+        status = item?.status_description ?? item?.status ?? null;
+      }
+
+      const bay = {
+        distance_m: +distM,
+        lat: +lat,
+        lon: +lon,
+
+        name: item?.name ?? null,
+
+        availableSpaces: available,
+        totalSpaces: total,
+
+        kerbsideid: item?.kerbsideid ?? null,
+        status_description: status,
+        status_timestamp: item?.status_timestamp ?? null,
+        lastupdated: item?.lastupdated ?? null,
+        zone_number: item?.zone_number ?? null,
+        street: item?.street ?? null,
+        max_stay_label: item?.max_stay_label ?? null,
+        max_stay_min: item?.max_stay_min ?? null,
+        metered: !!item?.metered,
+        price: item?.price ?? null,
+        address: item?.address ?? null
+      };
+
+      if (bay.distance_m <= 100) bands.within_100m.push(bay);
+      else if (bay.distance_m <= 200) bands["100_to_200m"].push(bay);
+      else if (bay.distance_m <= 500) bands["200_to_500m"].push(bay);
+      else if (bay.distance_m <= 1000) bands["500_to_1000m"].push(bay);
+    }
+
+    Object.keys(bands).forEach(k => bands[k].sort((a, b) => a.distance_m - b.distance_m));
+    return { bands, center: payload?.center || null };
+  }
+
+  // ---- Normalization previous version 0815 1254----
+  /*
   function normalizeToBands(payload) {
     if (payload && payload.bands) {
       return { bands: payload.bands, center: payload.center || null };
@@ -329,6 +404,8 @@ function initializeParkingSearch() {
     Object.keys(bands).forEach(k => bands[k].sort((a,b)=>a.distance_m-b.distance_m));
     return { bands, center: payload?.center || null };
   }
+
+  */
 
   function toMeters(distance) {
     if (distance == null) return null;
@@ -395,6 +472,83 @@ function initializeParkingSearch() {
     });
   }
 
+  // new version 0815
+  function createBayCard(bay) {
+    const card = document.createElement('div');
+    card.className = 'parking-item';
+  
+    // 1) Prefer counts; fall back to text status when counts are absent
+    const rawStatus = (bay.status_description || '').toLowerCase();
+    const hasCounts =
+      typeof bay.availableSpaces === 'number' &&
+      typeof bay.totalSpaces === 'number';
+  
+    // 2) Determine availability:
+    //    - If we have counts: available when availableSpaces > 0
+    //    - Else: fall back to text contains 'unoccupied'
+    const isAvail = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
+  
+    // 3) Build human-readable status text
+    let statusText;
+    if (hasCounts) {
+      const avail = Math.max(0, bay.availableSpaces || 0); // guard negative/undefined
+      const total = Math.max(0, bay.totalSpaces || 0);
+      statusText = isAvail
+        ? `Available (${avail}/${total})`
+        : `Unavailable (0/${total})`;
+    } else {
+      statusText = isAvail ? 'Available' : 'Unavailable';
+    }
+  
+    // 4) Badge color class for the distance chip (green when available, red when not)
+    const badgeClass = isAvail ? 'success' : 'danger';
+  
+    // 5) Build zone label:
+    //    - Use API "name" as-is if present (e.g., "Zone 7546")
+    //    - Else use "Zone <zone_number>" if we have a number
+    //    - Else fallback to "—"
+    const zoneLabel = bay.name
+      ? bay.name
+      : (bay.zone_number ? `Zone ${bay.zone_number}` : '—');
+  
+    // 6) Misc fields
+    const gm = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
+    const street = bay.street || `Bay #${bay.kerbsideid ?? 'N/A'}`;
+  
+    // Optional pills
+    const meterBadge = bay.metered ? `<span class="pill">Metered</span>` : '';
+    const maxStayText = bay.max_stay_label || '—';
+  
+    card.innerHTML = `
+      <div class="parking-header">
+        <div>
+          <div class="parking-name">${street}</div>
+          <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
+        </div>
+        <div class="parking-availability ${badgeClass}">
+          ${formatMeters(bay.distance_m)}
+        </div>
+      </div>
+      <div class="parking-details">
+        <div class="parking-info">
+          <div class="info-item"><span>🕒</span><span>${formatTime(bay.status_timestamp || bay.lastupdated)}</span></div>
+          <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
+          <div class="info-item"><span>🧭</span><span>${zoneLabel}</span></div>
+          <div class="info-item"><span>⏳</span><span>${maxStayText}</span></div>
+        </div>
+        <div class="parking-badges">
+          ${meterBadge}
+        </div>
+        <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
+      </div>
+    `;
+    return card;
+  }
+  
+
+
+  // ----  createBayCard previous version 0815 1254----
+  /*
   function createBayCard(bay) {
     const card = document.createElement('div');
     card.className = 'parking-item';
@@ -432,6 +586,8 @@ function initializeParkingSearch() {
     `;
     return card;
   }
+
+  */
 
   function formatMeters(m) {
     if (m == null || isNaN(m)) return '—';
