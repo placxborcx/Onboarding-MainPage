@@ -472,57 +472,83 @@ function initializeParkingSearch() {
     });
   }
 
-  // new version 0815
-  function createBayCard(bay) {
-    const card = document.createElement('div');
-    card.className = 'parking-item';
-  
-    // 1) Prefer counts; fall back to text status when counts are absent
-    const rawStatus = (bay.status_description || '').toLowerCase();
-    const hasCounts =
-      typeof bay.availableSpaces === 'number' &&
-      typeof bay.totalSpaces === 'number';
-  
-    // 2) Determine availability:
-    //    - If we have counts: available when availableSpaces > 0
-    //    - Else: fall back to text contains 'unoccupied'
-    const isAvail = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
-  
-    // 3) Build human-readable status text
-    let statusText;
-    if (hasCounts) {
-      const avail = Math.max(0, bay.availableSpaces || 0); // guard negative/undefined
-      const total = Math.max(0, bay.totalSpaces || 0);
-      statusText = isAvail
-        ? `Available (${avail}/${total})`
-        : `Unavailable (0/${total})`;
-    } else {
-      statusText = isAvail ? 'Available' : 'Unavailable';
+  const GOOGLE_MAPS_API_KEY = "AIzaSyAGZ4lmkAg-qNxKmSZvZe9VeGG8uEYT_s4";
+
+async function getAddressFromLatLon(lat, lon) {
+  const cacheKey = `addr_${lat.toFixed(6)}_${lon.toFixed(6)}`;
+
+  // Check localStorage first
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.status === "OK" && data.results.length > 0) {
+      const address = data.results[0].formatted_address;
+      localStorage.setItem(cacheKey, address);
+      return address;
     }
-  
-    // 4) Badge color class for the distance chip (green when available, red when not)
-    const badgeClass = isAvail ? 'success' : 'danger';
-  
-    // 5) Build zone label:
-    //    - Use API "name" as-is if present (e.g., "Zone 7546")
-    //    - Else use "Zone <zone_number>" if we have a number
-    //    - Else fallback to "—"
-    const zoneLabel = bay.name
-      ? bay.name
-      : (bay.zone_number ? `Zone ${bay.zone_number}` : '—');
-  
-    // 6) Misc fields
-    const gm = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
-    const street = bay.street || `Bay #${bay.kerbsideid ?? 'N/A'}`;
-  
-    // Optional pills
-    const meterBadge = bay.metered ? `<span class="pill">Metered</span>` : '';
-    const maxStayText = bay.max_stay_label || '—';
-  
+  } catch (err) {
+    console.error("Reverse geocoding failed", err);
+  }
+
+  return `Bay #N/A`; // fallback
+}
+
+// new version 0815 + Google Maps integration
+function createBayCard(bay) {
+  const card = document.createElement('div');
+  card.className = 'parking-item';
+
+  // 1) Prefer counts; fall back to text status when counts are absent
+  const rawStatus = (bay.status_description || '').toLowerCase();
+  const hasCounts =
+    typeof bay.availableSpaces === 'number' &&
+    typeof bay.totalSpaces === 'number';
+
+  // 2) Determine availability:
+  const isAvail = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
+
+  // 3) Build human-readable status text
+  let statusText;
+  if (hasCounts) {
+    const avail = Math.max(0, bay.availableSpaces || 0);
+    const total = Math.max(0, bay.totalSpaces || 0);
+    statusText = isAvail
+      ? `Available (${avail}/${total})`
+      : `Unavailable (0/${total})`;
+  } else {
+    statusText = isAvail ? 'Available' : 'Unavailable';
+  }
+
+  // 4) Badge color class
+  const badgeClass = isAvail ? 'success' : 'danger';
+
+  // 5) Build zone label
+  const zoneLabel = bay.name
+    ? bay.name
+    : (bay.zone_number ? `Zone ${bay.zone_number}` : '—');
+
+  // 6) Google Maps link
+  const gm = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
+
+  // 7) Resolve street name or fetch from Google API
+  const streetPromise = bay.street
+    ? Promise.resolve(bay.street)
+    : getAddressFromLatLon(bay.lat, bay.lon);
+
+  // Optional pills
+  const meterBadge = bay.metered ? `<span class="pill">Metered</span>` : '';
+
+  // Build card once address is ready
+  streetPromise.then(streetName => {
     card.innerHTML = `
       <div class="parking-header">
         <div>
-          <div class="parking-name">${street}</div>
+          <div class="parking-name">${streetName}</div>
           <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
         </div>
         <div class="parking-availability ${badgeClass}">
@@ -540,8 +566,10 @@ function initializeParkingSearch() {
         <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
       </div>
     `;
-    return card;
-  }
+  });
+
+  return card;
+}
   
 
 
