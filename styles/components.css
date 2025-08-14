@@ -436,13 +436,16 @@
 .ac-hidden{display:none}
 .ac-item {
     display: flex;
+    justify-content: flex-start;   /* left on main axis */
+    align-items: center;           /* vertical center only */
+    text-align: left;              /* default left for children */
     gap: 10px;
     padding: 10px 12px;
     cursor: pointer;
     color: var(--text-primary); /* font color black */
 }
 .ac-item:hover,.ac-active{background:#f2f5ff}
-.ac-ico{width:22px;text-align:center;opacity:.85}
+.ac-ico{width:22px;text-align:left;opacity:.85}
 .ac-title{font-weight:600; color: var(--text-primary);} /* font color black */
 .ac-sub{font-size:12px; color: var(--text-secondary);}
 .pill{display:inline-block;padding:.1rem .5rem;border-radius:999px;background:#eef3ff;color:#334;
