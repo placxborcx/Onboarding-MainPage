@@ -411,29 +411,25 @@ function initializeParkingSearch() {
     const maxStay = bay.max_stay_label ? `<span class="pill">${bay.max_stay_label}</span>` : '';
 
     card.innerHTML = `
-        <div class="parking-details">
-          <div class="parking-info">
-            <div class="info-item">
-              <span>🚦</span>
-              <span>${availabilityText}</span>
-            </div>
-            <div class="info-item">
-              <span>🧭</span>
-              <span>${bay.name ?? "—"}</span>
-            </div>
-            <div class="info-item">
-              <span>📏</span>
-              <span>${distanceMeters}</span>
-            </div>
-          </div>
-          <a href="${gmLink}" target="_blank" class="navigate-btn">
-            Open in Maps
-          </a>
+      <div class="parking-header">
+        <div>
+          <div class="parking-name">${street}</div>
+          <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
         </div>
-      `;
-      
-  }
-
+        <div class="parking-availability ${badgeClass}">
+          ${formatMeters(bay.distance_m)}
+        </div>
+      </div>
+      <div class="parking-details">
+        <div class="parking-info">
+          <div class="info-item"><span>🕒</span><span>${formatTime(bay.status_timestamp || bay.lastupdated)}</span></div>
+          <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
+          <div class="info-item"><span>🧭</span><span>Zone ${bay.name ?? '—'}</span></div>
+          <div class="info-item"><span>⏳</span><span>${maxStay || '—'}</span></div>
+        </div>
+        <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
+      </div>
+    `;
     return card;
   }
 
