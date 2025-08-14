@@ -424,7 +424,7 @@ function initializeParkingSearch() {
         <div class="parking-info">
           <div class="info-item"><span>🕒</span><span>${formatTime(bay.status_timestamp || bay.lastupdated)}</span></div>
           <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
-          <div class="info-item"><span>🧭</span><span>Zone ${bay.zone_number ?? '—'}</span></div>
+          <div class="info-item"><span>🧭</span><span>Zone ${bay.name ?? '—'}</span></div>
           <div class="info-item"><span>⏳</span><span>${maxStay || '—'}</span></div>
         </div>
         <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
