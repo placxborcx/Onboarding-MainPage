@@ -723,82 +723,9 @@ async function resolveBestLocationLabel(lat, lon) {
 }
 
 
-function createBayCard(bay) {
-  const card = document.createElement('div');
-  card.className = 'parking-item';
-
-  // ---- Availability: prefer counts; fallback to text ----
-  const rawStatus = (bay.status_description || '').toLowerCase();
-  const hasCounts = typeof bay.availableSpaces === 'number' && typeof bay.totalSpaces === 'number';
-  const isAvail   = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
-
-  let statusText;
-  if (hasCounts) {
-    const avail = Math.max(0, bay.availableSpaces || 0);
-    const total = Math.max(0, bay.totalSpaces || 0);
-    statusText = isAvail ? `Available (${avail}/${total})` : `Unavailable (0/${total})`;
-  } else {
-    statusText = isAvail ? 'Available' : 'Unavailable';
-  }
-
-  const badgeClass = isAvail ? 'success' : 'danger';
-
-  // ---- Initial render with placeholders (instant paint) ----
-  const initialTitle    = bay.street || 'Resolving place…';
-  const initialSubtitle = `📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}`;
-
-  // Base maps link with coordinates (will be upgraded with place_id later)
-  let mapsHref = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
-
-  card.innerHTML = `
-    <div class="parking-header">
-      <div>
-        <div class="parking-name">${initialTitle}</div>
-        <div class="parking-address">${initialSubtitle}</div>
-      </div>
-      <div class="parking-availability ${badgeClass}">
-        ${formatMeters(bay.distance_m)}
-      </div>
-    </div>
-    <div class="parking-details">
-      <div class="parking-info">
-        <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
-        <div class="info-item"><span>🧭</span><span>${bay.name ? bay.name : (bay.zone_number ? `Zone ${bay.zone_number}` : '—')}</span></div>
-      </div>
-      <div class="parking-badges">
-        ${bay.metered ? `<span class="pill">Metered</span>` : ''}
-      </div>
-      <a href="${mapsHref}" target="_blank" class="navigate-btn">Open in Maps</a>
-    </div>
-  `;
-
-  // ---- Async: resolve POI name + better Maps link, then patch the DOM only where needed ----
-  (async () => {
-    const nameEl = card.querySelector('.parking-name');
-    const subEl  = card.querySelector('.parking-address');
-    const linkEl = card.querySelector('.navigate-btn');
-
-    const { title, subtitle, place_id } = await resolveBestLocationLabel(bay.lat, bay.lon);
-
-    if (nameEl) nameEl.textContent = title;
-    if (subEl)  subEl.textContent  = subtitle;
-
-    // Upgrade Maps link with place_id if we have it (keeps destination coords too)
-    if (place_id && linkEl) {
-      linkEl.setAttribute(
-        'href',
-        `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}&destination_place_id=${place_id}`
-      );
-    }
-  })();
-
-  return card;
-}
-
 
 
 // new version 0815 + Google Maps integration
-/*
 function createBayCard(bay) {
   const card = document.createElement('div');
   card.className = 'parking-item';
@@ -870,7 +797,7 @@ function createBayCard(bay) {
 
   return card;
 }
-*/
+  
 
 
   // ----  createBayCard previous version 0815 1254----
