@@ -520,7 +520,7 @@ async function getAddressFromLatLon(lat, lon) {
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
     const resp = await fetch(url);
-    const data = await resp.json();
+    const data = await item.segment_desc;
 
     if (data.status === "OK" && data.results.length > 0) {
       const address = formatShortAddress(data.results[0]);
