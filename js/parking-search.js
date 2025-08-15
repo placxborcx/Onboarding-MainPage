@@ -723,9 +723,7 @@ async function resolveBestLocationLabel(lat, lon) {
 }
 
 
-
-
-// new version 0815 + Google Maps integration
+// new version 0815
 function createBayCard(bay) {
   const card = document.createElement('div');
   card.className = 'parking-item';
@@ -737,67 +735,65 @@ function createBayCard(bay) {
     typeof bay.totalSpaces === 'number';
 
   // 2) Determine availability:
+  //    - If we have counts: available when availableSpaces > 0
+  //    - Else: fall back to text contains 'unoccupied'
   const isAvail = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
 
   // 3) Build human-readable status text
   let statusText;
   if (hasCounts) {
-    const avail = Math.max(0, bay.availableSpaces || 0);
+    const avail = Math.max(0, bay.availableSpaces || 0); // guard negative/undefined
     const total = Math.max(0, bay.totalSpaces || 0);
     statusText = isAvail
-      ? `Available (${avail}/${total})`
-      : `Unavailable (0/${total})`;
+      ? ⁠ Available (${avail}/${total}) ⁠
+      : ⁠ Unavailable (0/${total}) ⁠;
   } else {
     statusText = isAvail ? 'Available' : 'Unavailable';
   }
 
-  // 4) Badge color class
+  // 4) Badge color class for the distance chip (green when available, red when not)
   const badgeClass = isAvail ? 'success' : 'danger';
 
-  // 5) Build zone label
+  // 5) Build zone label:
+  //    - Use API "name" as-is if present (e.g., "Zone 7546")
+  //    - Else use "Zone <zone_number>" if we have a number
+  //    - Else fallback to "—"
   const zoneLabel = bay.name
     ? bay.name
-    : (bay.zone_number ? `Zone ${bay.zone_number}` : '—');
+    : (bay.zone_number ? ⁠ Zone ${bay.zone_number} ⁠ : '—');
 
-  // 6) Google Maps link
-  const gm = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
-
-  // 7) Resolve street name or fetch from Google API
-  const streetPromise = bay.street
-    ? Promise.resolve(bay.street)
-    : getAddressFromLatLon(bay.lat, bay.lon);
+  // 6) Misc fields
+  const gm = ⁠ https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon} ⁠;
+  const street = bay.street || ⁠ Bay #${bay.kerbsideid ?? 'N/A'} ⁠;
 
   // Optional pills
-  const meterBadge = bay.metered ? `<span class="pill">Metered</span>` : '';
+  const meterBadge = bay.metered ? ⁠ <span class="pill">Metered</span> ⁠ : '';
+  const maxStayText = bay.max_stay_label || '—';
 
-  // Build card once address is ready
-  streetPromise.then(streetName => {
-    card.innerHTML = `
-      <div class="parking-header">
-        <div>
-          <div class="parking-name">${streetName}</div>
-          <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
-        </div>
-        <div class="parking-availability ${badgeClass}">
-          ${formatMeters(bay.distance_m)}
-        </div>
+  card.innerHTML = `
+    <div class="parking-header">
+      <div>
+        <div class="parking-name">${street}</div>
+        <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
       </div>
-      <div class="parking-details">
-        <div class="parking-info">
-          <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
-          <div class="info-item"><span>🧭</span><span>${zoneLabel}</span></div>
-        </div>
-        <div class="parking-badges">
-          ${meterBadge}
-        </div>
-        <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
+      <div class="parking-availability ${badgeClass}">
+        ${formatMeters(bay.distance_m)}
       </div>
-    `;
-  });
-
+    </div>
+    <div class="parking-details">
+      <div class="parking-info">
+        <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
+        <div class="info-item"><span>🧭</span><span>${zoneLabel}</span></div>
+      </div>
+      <div class="parking-badges">
+        ${meterBadge}
+      </div>
+      <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
+    </div>
+  `;
   return card;
 }
-  
+
 
 
   // ----  createBayCard previous version 0815 1254----
