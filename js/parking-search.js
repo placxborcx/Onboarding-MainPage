@@ -472,6 +472,80 @@ function initializeParkingSearch() {
     });
   }
 
+// new version
+  // IMPORTANT: Lock this key down to your domain in Google Cloud (HTTP referrer restrictions).
+const GOOGLE_MAPS_API_KEY = "AIzaSyAGZ4lmkAg-qNxKmSZvZe9VeGG8uEYT_s4";
+
+// In-memory cache for this session
+const addrMemCache = new Map();
+
+// Build a concise address like "123 Collins St, Melbourne, VIC"
+function formatShortAddress(geocodeResult) {
+  const byType = {};
+  for (const c of geocodeResult.address_components) {
+    for (const t of c.types) byType[t] = c;
+  }
+  const streetNum = byType.street_number?.long_name || "";
+  const route     = byType.route?.long_name || "";
+  const locality  = byType.locality?.long_name || byType.sublocality?.long_name || "";
+  const state     = byType.administrative_area_level_1?.short_name || "";
+
+  const line1 = streetNum && route ? `${streetNum} ${route}` : (route || streetNum);
+  const short = [line1, locality, state].filter(Boolean).join(", ");
+  return short || geocodeResult.formatted_address;
+}
+
+// Reverse geocoding with in-memory cache + 7-day localStorage TTL
+async function getAddressFromLatLon(lat, lon) {
+  // Key normalized to ~meter-level precision; adjust if you want
+  const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  const lsKey = `addr_${key}`;
+
+  // 1) Memory cache (fastest)
+  if (addrMemCache.has(key)) return addrMemCache.get(key);
+
+  // 2) localStorage with TTL
+  const cached = localStorage.getItem(lsKey);
+  if (cached) {
+    try {
+      const { value, ts } = JSON.parse(cached);
+      if (Date.now() - ts < 7 * 24 * 60 * 60 * 1000) {
+        addrMemCache.set(key, value);
+        return value;
+      }
+    } catch {}
+  }
+
+  // 3) Google Geocoding API
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.status === "OK" && data.results.length > 0) {
+      const address = formatShortAddress(data.results[0]);
+      addrMemCache.set(key, address);
+      localStorage.setItem(lsKey, JSON.stringify({ value: address, ts: Date.now() }));
+      return address;
+    } else {
+      if (data.error_message) {
+        console.warn("Geocode error:", data.status, data.error_message);
+      } else {
+        console.warn("Geocode no result:", data.status);
+      }
+    }
+  } catch (err) {
+    console.error("Reverse geocoding failed", err);
+  }
+
+  // 4) Fallback to coordinates string
+  const fallback = `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  addrMemCache.set(key, fallback);
+  return fallback;
+}
+
+
+  /*
   const GOOGLE_MAPS_API_KEY = "AIzaSyAGZ4lmkAg-qNxKmSZvZe9VeGG8uEYT_s4";
 
 async function getAddressFromLatLon(lat, lon) {
@@ -497,6 +571,7 @@ async function getAddressFromLatLon(lat, lon) {
 
   return `Bay #N/A`; // fallback
 }
+*/
 
 // new version 0815 + Google Maps integration
 function createBayCard(bay) {
