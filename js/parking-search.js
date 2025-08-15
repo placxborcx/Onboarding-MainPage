@@ -506,53 +506,131 @@ function formatShortAddress(geocodeResult) {
 }
 
 // Reverse geocoding with in-memory cache + 7-day localStorage TTL
+// ---- Google (Places + Geocoding) config ----
+const GOOGLE_MAPS_API_KEY = "YOUR_GOOGLE_KEY"; // lock by HTTP referrer in Google Cloud
+
+// In-memory caches for this session
+const addrMemCache = new Map();
+const poiMemCache  = new Map();
+
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = d => d * Math.PI / 180, R = 6371000;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Build a concise address like "123 Collins St, Melbourne, VIC"
+function formatShortAddress(geocodeResult) {
+  const byType = {};
+  for (const c of geocodeResult.address_components) {
+    for (const t of c.types) byType[t] = c;
+  }
+  const streetNum = byType.street_number?.long_name || "";
+  const route     = byType.route?.long_name || "";
+  const locality  = byType.locality?.long_name || byType.sublocality?.long_name || "";
+  const state     = byType.administrative_area_level_1?.short_name || "";
+  const line1 = streetNum && route ? `${streetNum} ${route}` : (route || streetNum);
+  const short = [line1, locality, state].filter(Boolean).join(", ");
+  return short || geocodeResult.formatted_address;
+}
+
+// Reverse geocoding with mem-cache + 7-day localStorage TTL
 async function getAddressFromLatLon(lat, lon) {
-  // Key normalized to ~meter-level precision; adjust if you want
   const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
   const lsKey = `addr_${key}`;
-
-  // 1) Memory cache (fastest)
   if (addrMemCache.has(key)) return addrMemCache.get(key);
 
-  // 2) localStorage with TTL
   const cached = localStorage.getItem(lsKey);
   if (cached) {
     try {
       const { value, ts } = JSON.parse(cached);
-      if (Date.now() - ts < 7 * 24 * 60 * 60 * 1000) {
+      if (Date.now() - ts < 7*24*60*60*1000) {
         addrMemCache.set(key, value);
         return value;
       }
     } catch {}
   }
 
-  // 3) Google Geocoding API
   try {
     const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
     const resp = await fetch(url);
     const data = await resp.json();
-
     if (data.status === "OK" && data.results.length > 0) {
       const address = formatShortAddress(data.results[0]);
       addrMemCache.set(key, address);
       localStorage.setItem(lsKey, JSON.stringify({ value: address, ts: Date.now() }));
       return address;
-    } else {
-      if (data.error_message) {
-        console.warn("Geocode error:", data.status, data.error_message);
-      } else {
-        console.warn("Geocode no result:", data.status);
-      }
     }
-  } catch (err) {
-    console.error("Reverse geocoding failed", err);
+  } catch (e) { console.warn("Geocode failed:", e); }
+
+  return `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+}
+
+// Get nearest POI name from Places API: try type=parking, then type=establishment
+async function getPlaceNameFromLatLon(lat, lon) {
+  const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  const lsKey = `poi_${key}`;
+  if (poiMemCache.has(key)) return poiMemCache.get(key);
+
+  const cached = localStorage.getItem(lsKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Date.now() - parsed.ts < 7*24*60*60*1000) {
+        poiMemCache.set(key, parsed.value);
+        return parsed.value; // { name, place_id }
+      }
+    } catch {}
   }
 
-  // 4) Fallback to coordinates string
-  const fallback = `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
-  addrMemCache.set(key, fallback);
-  return fallback;
+  async function queryNearby(type) {
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&rankby=distance&type=${type}&key=${GOOGLE_MAPS_API_KEY}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status === "OK" && data.results.length > 0) {
+      // Prefer a result within ~60 m of the bay
+      for (const r of data.results) {
+        const p = r.geometry?.location;
+        if (!p) continue;
+        if (haversineMeters(lat, lon, p.lat, p.lng) <= 60) {
+          return { name: r.name, place_id: r.place_id };
+        }
+      }
+      // Or fall back to the closest entry
+      const r0 = data.results[0];
+      if (r0?.name && r0?.place_id) return { name: r0.name, place_id: r0.place_id };
+    }
+    return null;
+  }
+
+  try {
+    let best = await queryNearby("parking");
+    if (!best) best = await queryNearby("establishment");
+    if (best) {
+      poiMemCache.set(key, best);
+      localStorage.setItem(lsKey, JSON.stringify({ value: best, ts: Date.now() }));
+      return best;
+    }
+  } catch (e) { console.warn("Places nearby failed:", e); }
+
+  return null;
 }
+
+// Resolve best label for a bay: POI name (title) + short address (subtitle)
+async function resolveBestLocationLabel(lat, lon) {
+  const [poi, addr] = await Promise.all([
+    getPlaceNameFromLatLon(lat, lon),
+    getAddressFromLatLon(lat, lon)
+  ]);
+  if (poi?.name) {
+    return { title: poi.name, subtitle: addr, place_id: poi.place_id };
+  }
+  return { title: addr, subtitle: `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`, place_id: null };
+}
+
 
 
   /*
@@ -588,76 +666,62 @@ function createBayCard(bay) {
   const card = document.createElement('div');
   card.className = 'parking-item';
 
-  // 1) Prefer counts; fall back to text status when counts are absent
+  // Availability (prefer counts)
   const rawStatus = (bay.status_description || '').toLowerCase();
-  const hasCounts =
-    typeof bay.availableSpaces === 'number' &&
-    typeof bay.totalSpaces === 'number';
+  const hasCounts = typeof bay.availableSpaces === 'number' && typeof bay.totalSpaces === 'number';
+  const isAvail   = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
 
-  // 2) Determine availability:
-  const isAvail = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
+  const statusText = hasCounts
+    ? (isAvail ? `Available (${Math.max(0, bay.availableSpaces)}/${Math.max(0, bay.totalSpaces)})`
+               : `Unavailable (0/${Math.max(0, bay.totalSpaces)})`)
+    : (isAvail ? 'Available' : 'Unavailable');
 
-  // 3) Build human-readable status text
-  let statusText;
-  if (hasCounts) {
-    const avail = Math.max(0, bay.availableSpaces || 0);
-    const total = Math.max(0, bay.totalSpaces || 0);
-    statusText = isAvail
-      ? `Available (${avail}/${total})`
-      : `Unavailable (0/${total})`;
-  } else {
-    statusText = isAvail ? 'Available' : 'Unavailable';
-  }
-
-  // 4) Badge color class
   const badgeClass = isAvail ? 'success' : 'danger';
+  const zoneLabel  = bay.name ? bay.name : (bay.zone_number ? `Zone ${bay.zone_number}` : '—');
 
-  // 5) Build zone label
-  const zoneLabel = bay.name
-    ? bay.name
-    : (bay.zone_number ? `Zone ${bay.zone_number}` : '—');
-
-  // 6) Google Maps link
+  // Initial render (instant paint)
   const gm = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
-
-  // 7) Resolve street name or fetch from Google API
-  // 7) Resolve display name: prefer segment description, then street, then reverse‑geocode
-  const streetPromise = bay.segment_description
-    ? Promise.resolve(bay.segment_description)
-    : (bay.street
-      ? Promise.resolve(bay.street)
-      : getAddressFromLatLon(bay.lat, bay.lon));
-
-  // Optional pills
-  const meterBadge = bay.metered ? `<span class="pill">Metered</span>` : '';
-
-  // Build card once address is ready
-  streetPromise.then(streetName => {
-    card.innerHTML = `
-      <div class="parking-header">
-        <div>
-          <div class="parking-name">${streetName}</div>
-          <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
-        </div>
-        <div class="parking-availability ${badgeClass}">
-          ${formatMeters(bay.distance_m)}
-        </div>
+  card.innerHTML = `
+    <div class="parking-header">
+      <div>
+        <div class="parking-name">Resolving place…</div>
+        <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
       </div>
-      <div class="parking-details">
-        <div class="parking-info">
-          <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
-          <div class="info-item"><span>🧭</span><span>${zoneLabel}</span></div>
-        </div>
-        <div class="parking-badges">
-          ${meterBadge}
-        </div>
-        <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
+      <div class="parking-availability ${badgeClass}">
+        ${formatMeters(bay.distance_m)}
       </div>
-    `;
-  });
+    </div>
+    <div class="parking-details">
+      <div class="parking-info">
+        <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
+        <div class="info-item"><span>🧭</span><span>${zoneLabel}</span></div>
+      </div>
+      <div class="parking-badges">
+        ${bay.metered ? `<span class="pill">Metered</span>` : ''}
+      </div>
+      <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
+    </div>
+  `;
+
+  // Async: replace title (POI name) and subtitle (short address), upgrade Maps link with place_id
+  (async () => {
+    const nameEl = card.querySelector('.parking-name');
+    const addrEl = card.querySelector('.parking-address');
+    const linkEl = card.querySelector('.navigate-btn');
+
+    const { title, subtitle, place_id } = await resolveBestLocationLabel(bay.lat, bay.lon);
+
+    if (nameEl) nameEl.textContent = title;       // <-- this replaces the first coordinates line
+    if (addrEl) addrEl.textContent = subtitle;    // short address (not just coords)
+
+    if (place_id && linkEl) {
+      linkEl.href = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}&destination_place_id=${place_id}`;
+    }
+  })();
 
   return card;
 }
+
   
 
 
