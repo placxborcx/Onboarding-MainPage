@@ -573,7 +573,232 @@ async function getAddressFromLatLon(lat, lon) {
 }
 */
 
+
+// IMPORTANT: restrict this key by HTTP referrer in Google Cloud Console.
+// const GOOGLE_MAPS_API_KEY = "YOUR_KEY_HERE";
+
+// In-memory caches for the session
+const addrMemCache = new Map();
+const poiMemCache  = new Map();
+
+// Quick haversine distance in meters (for sanity threshold)
+function haversineMeters(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => d * Math.PI / 180;
+  const R = 6371000; // meters
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+            Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Build a concise address like "123 Collins St, Melbourne, VIC"
+function formatShortAddress(geocodeResult) {
+  const byType = {};
+  for (const c of geocodeResult.address_components) {
+    for (const t of c.types) byType[t] = c;
+  }
+  const streetNum = byType.street_number?.long_name || "";
+  const route     = byType.route?.long_name || "";
+  const locality  = byType.locality?.long_name || byType.sublocality?.long_name || "";
+  const state     = byType.administrative_area_level_1?.short_name || "";
+
+  const line1 = streetNum && route ? `${streetNum} ${route}` : (route || streetNum);
+  const short = [line1, locality, state].filter(Boolean).join(", ");
+  return short || geocodeResult.formatted_address;
+}
+
+// Reverse geocode with mem-cache + 7-day localStorage TTL
+async function getAddressFromLatLon(lat, lon) {
+  const key  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  const lsKey = `addr_${key}`;
+  if (addrMemCache.has(key)) return addrMemCache.get(key);
+
+  const cached = localStorage.getItem(lsKey);
+  if (cached) {
+    try {
+      const { value, ts } = JSON.parse(cached);
+      if (Date.now() - ts < 7 * 24 * 60 * 60 * 1000) {
+        addrMemCache.set(key, value);
+        return value;
+      }
+    } catch {}
+  }
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status === "OK" && data.results.length > 0) {
+      const address = formatShortAddress(data.results[0]);
+      addrMemCache.set(key, address);
+      localStorage.setItem(lsKey, JSON.stringify({ value: address, ts: Date.now() }));
+      return address;
+    }
+  } catch (e) {
+    console.error("Reverse geocoding failed:", e);
+  }
+
+  const fallback = `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  addrMemCache.set(key, fallback);
+  return fallback;
+}
+
+// Get nearest Google Maps place name (POI) via Places API
+// 1) try type=parking; if none within 60m, 2) fallback to type=establishment
+async function getPlaceNameFromLatLon(lat, lon) {
+  const key  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  const lsKey = `poi_${key}`;
+  if (poiMemCache.has(key)) return poiMemCache.get(key);
+
+  // Try localStorage (7 days)
+  const cached = localStorage.getItem(lsKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Date.now() - parsed.ts < 7 * 24 * 60 * 60 * 1000) {
+        poiMemCache.set(key, parsed.value);
+        return parsed.value; // { name, place_id }
+      }
+    } catch {}
+  }
+
+  async function queryNearby(type) {
+    const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&rankby=distance&type=${type}&key=${GOOGLE_MAPS_API_KEY}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.status === "OK" && data.results.length > 0) {
+      // Choose the closest reasonable result
+      for (const r of data.results) {
+        const p = r.geometry?.location;
+        if (!p) continue;
+        const d = haversineMeters(lat, lon, p.lat, p.lng);
+        if (d <= 60) { // accept if within ~60m of the bay
+          return { name: r.name, place_id: r.place_id };
+        }
+      }
+      // If none within threshold, still allow the very first (closest) as a soft fallback
+      const r0 = data.results[0];
+      if (r0?.name && r0?.place_id) {
+        return { name: r0.name, place_id: r0.place_id };
+      }
+    }
+    return null;
+  }
+
+  try {
+    // 1) Prefer a parking POI
+    let best = await queryNearby("parking");
+    // 2) Fallback: nearest establishment (building, venue, etc.)
+    if (!best) best = await queryNearby("establishment");
+
+    if (best) {
+      poiMemCache.set(key, best);
+      localStorage.setItem(lsKey, JSON.stringify({ value: best, ts: Date.now() }));
+      return best;
+    }
+  } catch (e) {
+    console.error("Places nearby failed:", e);
+  }
+
+  return null;
+}
+
+// Resolve best label: POI name (if any) + short address; also return place_id for better maps link
+async function resolveBestLocationLabel(lat, lon) {
+  const [poi, addr] = await Promise.all([
+    getPlaceNameFromLatLon(lat, lon),
+    getAddressFromLatLon(lat, lon)
+  ]);
+  if (poi && poi.name) {
+    return { title: poi.name, subtitle: addr, place_id: poi.place_id };
+  }
+  // Fallback: use address as title, keep coords as subtitle
+  return {
+    title: addr,
+    subtitle: `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`,
+    place_id: null
+  };
+}
+
+
+function createBayCard(bay) {
+  const card = document.createElement('div');
+  card.className = 'parking-item';
+
+  // ---- Availability: prefer counts; fallback to text ----
+  const rawStatus = (bay.status_description || '').toLowerCase();
+  const hasCounts = typeof bay.availableSpaces === 'number' && typeof bay.totalSpaces === 'number';
+  const isAvail   = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
+
+  let statusText;
+  if (hasCounts) {
+    const avail = Math.max(0, bay.availableSpaces || 0);
+    const total = Math.max(0, bay.totalSpaces || 0);
+    statusText = isAvail ? `Available (${avail}/${total})` : `Unavailable (0/${total})`;
+  } else {
+    statusText = isAvail ? 'Available' : 'Unavailable';
+  }
+
+  const badgeClass = isAvail ? 'success' : 'danger';
+
+  // ---- Initial render with placeholders (instant paint) ----
+  const initialTitle    = bay.street || 'Resolving place…';
+  const initialSubtitle = `📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}`;
+
+  // Base maps link with coordinates (will be upgraded with place_id later)
+  let mapsHref = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
+
+  card.innerHTML = `
+    <div class="parking-header">
+      <div>
+        <div class="parking-name">${initialTitle}</div>
+        <div class="parking-address">${initialSubtitle}</div>
+      </div>
+      <div class="parking-availability ${badgeClass}">
+        ${formatMeters(bay.distance_m)}
+      </div>
+    </div>
+    <div class="parking-details">
+      <div class="parking-info">
+        <div class="info-item"><span>🚦</span><span>${statusText}</span></div>
+        <div class="info-item"><span>🧭</span><span>${bay.name ? bay.name : (bay.zone_number ? `Zone ${bay.zone_number}` : '—')}</span></div>
+      </div>
+      <div class="parking-badges">
+        ${bay.metered ? `<span class="pill">Metered</span>` : ''}
+      </div>
+      <a href="${mapsHref}" target="_blank" class="navigate-btn">Open in Maps</a>
+    </div>
+  `;
+
+  // ---- Async: resolve POI name + better Maps link, then patch the DOM only where needed ----
+  (async () => {
+    const nameEl = card.querySelector('.parking-name');
+    const subEl  = card.querySelector('.parking-address');
+    const linkEl = card.querySelector('.navigate-btn');
+
+    const { title, subtitle, place_id } = await resolveBestLocationLabel(bay.lat, bay.lon);
+
+    if (nameEl) nameEl.textContent = title;
+    if (subEl)  subEl.textContent  = subtitle;
+
+    // Upgrade Maps link with place_id if we have it (keeps destination coords too)
+    if (place_id && linkEl) {
+      linkEl.setAttribute(
+        'href',
+        `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}&destination_place_id=${place_id}`
+      );
+    }
+  })();
+
+  return card;
+}
+
+
+
 // new version 0815 + Google Maps integration
+/*
 function createBayCard(bay) {
   const card = document.createElement('div');
   card.className = 'parking-item';
@@ -645,7 +870,7 @@ function createBayCard(bay) {
 
   return card;
 }
-  
+*/
 
 
   // ----  createBayCard previous version 0815 1254----
