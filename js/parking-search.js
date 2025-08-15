@@ -1,4 +1,3 @@
-<script>
 function initializeParkingSearch() {
   // ---- Hook up DOM ----
   const locationInput  = document.getElementById('location-input');
@@ -144,7 +143,7 @@ function initializeParkingSearch() {
     // Hide features section when search starts
     const featuresSection = document.querySelector('.features-section');
     if (featuresSection) {
-      featuresSection.style.display = 'none';
+        featuresSection.style.display = 'none';
     }
     loadingState.classList.remove('hidden');
 
@@ -192,7 +191,7 @@ function initializeParkingSearch() {
     // Show features section when clearing results
     const featuresSection = document.querySelector('.features-section');
     if (featuresSection) {
-      featuresSection.style.display = 'block';
+        featuresSection.style.display = 'block';
     }
   }
 
@@ -288,8 +287,10 @@ function initializeParkingSearch() {
     return Array.isArray(cats) ? cats.join(", ") : (cats || "");
   }
 
+
   // ---- Normalization ----
   function normalizeToBands(payload) {
+    
     if (payload && payload.bands) {
       return { bands: payload.bands, center: payload.center || null };
     }
@@ -297,6 +298,7 @@ function initializeParkingSearch() {
       return { bands: payload.results, center: payload.center || null };
     }
 
+   
     const flat = Array.isArray(payload?.results)
       ? payload.results
       : (Array.isArray(payload) ? payload : []);
@@ -314,9 +316,17 @@ function initializeParkingSearch() {
       const distM = toMeters(item?.distance) ?? item?.distance_m ?? null;
       if (lat == null || lon == null || distM == null) continue;
 
+         // accept any of these keys coming from the API
+      const segDesc =
+        item?.segment_description ??
+        item?.segmentDescription ??
+        item?.segment_desc ??
+        null;
+
       const available = (typeof item?.availableSpaces === 'number') ? item.availableSpaces : null;
       const total     = (typeof item?.totalSpaces === 'number') ? item.totalSpaces : null;
 
+      
       let status = null;
       if (available != null) {
         status = available > 0 ? 'unoccupied' : 'occupied';
@@ -345,7 +355,11 @@ function initializeParkingSearch() {
         metered: !!item?.metered,
         price: item?.price ?? null,
         address: item?.address ?? null
+        street: item?.street ?? null,
+        segment_description: segDesc,  // <— keep it
       };
+      
+
 
       if (bay.distance_m <= 100) bands.within_100m.push(bay);
       else if (bay.distance_m <= 200) bands["100_to_200m"].push(bay);
@@ -356,6 +370,52 @@ function initializeParkingSearch() {
     Object.keys(bands).forEach(k => bands[k].sort((a, b) => a.distance_m - b.distance_m));
     return { bands, center: payload?.center || null };
   }
+
+  // ---- Normalization previous version 0815 1254----
+  /*
+  function normalizeToBands(payload) {
+    if (payload && payload.bands) {
+      return { bands: payload.bands, center: payload.center || null };
+    }
+    if (payload && payload.results && !Array.isArray(payload.results)) {
+      return { bands: payload.results, center: payload.center || null };
+    }
+    const flat = Array.isArray(payload?.results) ? payload.results : [];
+    const bands = {
+      within_100m:  [],
+      "100_to_200m": [],
+      "200_to_500m": [],
+      "500_to_1000m": []
+    };
+    for (const item of flat) {
+      const lat = item?.coordinates?.lat ?? item?.lat ?? null;
+      const lon = item?.coordinates?.lng ?? item?.lon ?? null;
+      const distM = toMeters(item?.distance) ?? item?.distance_m ?? null;
+      if (lat == null || lon == null || distM == null) continue;
+      const bay = {
+        distance_m: +distM,
+        lat: +lat,
+        lon: +lon,
+        kerbsideid: item?.kerbsideid ?? null,
+        status_description: item?.status_description ?? item?.status ?? null,
+        status_timestamp: item?.status_timestamp ?? null,
+        lastupdated: item?.lastupdated ?? null,
+        zone_number: item?.zone_number ?? null,
+        street: item?.street ?? null,
+        max_stay_label: item?.max_stay_label ?? null,
+        max_stay_min: item?.max_stay_min ?? null,
+        metered: !!item?.metered,
+      };
+      if (bay.distance_m <= 100) bands.within_100m.push(bay);
+      else if (bay.distance_m <= 200) bands["100_to_200m"].push(bay);
+      else if (bay.distance_m <= 500) bands["200_to_500m"].push(bay);
+      else if (bay.distance_m <= 1000) bands["500_to_1000m"].push(bay);
+    }
+    Object.keys(bands).forEach(k => bands[k].sort((a,b)=>a.distance_m-b.distance_m));
+    return { bands, center: payload?.center || null };
+  }
+
+  */
 
   function toMeters(distance) {
     if (distance == null) return null;
@@ -368,146 +428,6 @@ function initializeParkingSearch() {
     if (m) return Math.round(parseFloat(m[1]));
     const n = parseFloat(v);
     return isNaN(n) ? null : n;
-  }
-
-  // ---- Google reverse geocode + POI helpers (single set; no duplicates) ----
-  const GOOGLE_MAPS_API_KEY = "AIzaSyAGZ4lmkAg-qNxKmSZvZe9VeGG8uEYT_s4"; // restrict by HTTP referrer!
-
-  const addrMemCache = new Map();
-  const poiMemCache  = new Map();
-
-  function haversineMeters(lat1, lon1, lat2, lon2) {
-    const toRad = (d) => d * Math.PI / 180;
-    const R = 6371000; // meters
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat/2)**2 +
-              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-              Math.sin(dLon/2)**2;
-    return 2 * R * Math.asin(Math.sqrt(a));
-  }
-
-  function formatShortAddress(geocodeResult) {
-    const byType = {};
-    for (const c of geocodeResult.address_components) {
-      for (const t of c.types) byType[t] = c;
-    }
-    const streetNum = byType.street_number?.long_name || "";
-    const route     = byType.route?.long_name || "";
-    const locality  = byType.locality?.long_name || byType.sublocality?.long_name || "";
-    const state     = byType.administrative_area_level_1?.short_name || "";
-
-    const line1 = streetNum && route ? `${streetNum} ${route}` : (route || streetNum);
-    const short = [line1, locality, state].filter(Boolean).join(", ");
-    return short || geocodeResult.formatted_address;
-  }
-
-  async function getAddressFromLatLon(lat, lon) {
-    const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-    const lsKey = `addr_${key}`;
-
-    if (addrMemCache.has(key)) return addrMemCache.get(key);
-
-    const cached = localStorage.getItem(lsKey);
-    if (cached) {
-      try {
-        const { value, ts } = JSON.parse(cached);
-        if (Date.now() - ts < 7 * 24 * 60 * 60 * 1000) {
-          addrMemCache.set(key, value);
-          return value;
-        }
-      } catch {}
-    }
-
-    try {
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
-      const resp = await fetch(url);
-      const data = await resp.json(); // <-- fixed
-      if (data.status === "OK" && data.results.length > 0) {
-        const address = formatShortAddress(data.results[0]);
-        addrMemCache.set(key, address);
-        localStorage.setItem(lsKey, JSON.stringify({ value: address, ts: Date.now() }));
-        return address;
-      } else {
-        if (data.error_message) {
-          console.warn("Geocode error:", data.status, data.error_message);
-        } else {
-          console.warn("Geocode no result:", data.status);
-        }
-      }
-    } catch (err) {
-      console.error("Reverse geocoding failed", err);
-    }
-
-    const fallback = `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
-    addrMemCache.set(key, fallback);
-    return fallback;
-  }
-
-  async function getPlaceNameFromLatLon(lat, lon) {
-    const key  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-    const lsKey = `poi_${key}`;
-    if (poiMemCache.has(key)) return poiMemCache.get(key);
-
-    const cached = localStorage.getItem(lsKey);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (Date.now() - parsed.ts < 7 * 24 * 60 * 60 * 1000) {
-          poiMemCache.set(key, parsed.value);
-          return parsed.value; // { name, place_id }
-        }
-      } catch {}
-    }
-
-    async function queryNearby(type) {
-      const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lon}&rankby=distance&type=${type}&key=${GOOGLE_MAPS_API_KEY}`;
-      const resp = await fetch(url);
-      const data = await resp.json();
-      if (data.status === "OK" && data.results.length > 0) {
-        for (const r of data.results) {
-          const p = r.geometry?.location;
-          if (!p) continue;
-          const d = haversineMeters(lat, lon, p.lat, p.lng);
-          if (d <= 60) {
-            return { name: r.name, place_id: r.place_id };
-          }
-        }
-        const r0 = data.results[0];
-        if (r0?.name && r0?.place_id) {
-          return { name: r0.name, place_id: r0.place_id };
-        }
-      }
-      return null;
-    }
-
-    try {
-      let best = await queryNearby("parking");
-      if (!best) best = await queryNearby("establishment");
-      if (best) {
-        poiMemCache.set(key, best);
-        localStorage.setItem(lsKey, JSON.stringify({ value: best, ts: Date.now() }));
-        return best;
-      }
-    } catch (e) {
-      console.error("Places nearby failed:", e);
-    }
-    return null;
-  }
-
-  async function resolveBestLocationLabel(lat, lon) {
-    const [poi, addr] = await Promise.all([
-      getPlaceNameFromLatLon(lat, lon),
-      getAddressFromLatLon(lat, lon)
-    ]);
-    if (poi && poi.name) {
-      return { title: poi.name, subtitle: addr, place_id: poi.place_id };
-    }
-    return {
-      title: addr,
-      subtitle: `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`,
-      place_id: null
-    };
   }
 
   // ---- Renderers ----
@@ -527,6 +447,7 @@ function initializeParkingSearch() {
       container.appendChild(hint);
     }
 
+    // comparator for "Longest stay" (desc), tie-breaker distance (asc)
     const byMaxStay = (a, b) => {
       const av = a.max_stay_min ?? -1;
       const bv = b.max_stay_min ?? -1;
@@ -535,7 +456,7 @@ function initializeParkingSearch() {
     };
 
     order.forEach(([key, label]) => {
-      const items = (bands[key] || []).slice();
+      const items = (bands[key] || []).slice(); // clone (don’t mutate original)
       if (sortMode === 'maxstay') items.sort(byMaxStay);
 
       const section = document.createElement('div');
@@ -561,18 +482,122 @@ function initializeParkingSearch() {
     });
   }
 
-<<<<<<< HEAD
+// new version
+  // IMPORTANT: Lock this key down to your domain in Google Cloud (HTTP referrer restrictions).
+const GOOGLE_MAPS_API_KEY = "AIzaSyAGZ4lmkAg-qNxKmSZvZe9VeGG8uEYT_s4";
+
+// In-memory cache for this session
+const addrMemCache = new Map();
+
+// Build a concise address like "123 Collins St, Melbourne, VIC"
+function formatShortAddress(geocodeResult) {
+  const byType = {};
+  for (const c of geocodeResult.address_components) {
+    for (const t of c.types) byType[t] = c;
+  }
+  const streetNum = byType.street_number?.long_name || "";
+  const route     = byType.route?.long_name || "";
+  const locality  = byType.locality?.long_name || byType.sublocality?.long_name || "";
+  const state     = byType.administrative_area_level_1?.short_name || "";
+
+  const line1 = streetNum && route ? `${streetNum} ${route}` : (route || streetNum);
+  const short = [line1, locality, state].filter(Boolean).join(", ");
+  return short || geocodeResult.formatted_address;
+}
+
+// Reverse geocoding with in-memory cache + 7-day localStorage TTL
+async function getAddressFromLatLon(lat, lon) {
+  // Key normalized to ~meter-level precision; adjust if you want
+  const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+  const lsKey = `addr_${key}`;
+
+  // 1) Memory cache (fastest)
+  if (addrMemCache.has(key)) return addrMemCache.get(key);
+
+  // 2) localStorage with TTL
+  const cached = localStorage.getItem(lsKey);
+  if (cached) {
+    try {
+      const { value, ts } = JSON.parse(cached);
+      if (Date.now() - ts < 7 * 24 * 60 * 60 * 1000) {
+        addrMemCache.set(key, value);
+        return value;
+      }
+    } catch {}
+  }
+
+  // 3) Google Geocoding API
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.status === "OK" && data.results.length > 0) {
+      const address = formatShortAddress(data.results[0]);
+      addrMemCache.set(key, address);
+      localStorage.setItem(lsKey, JSON.stringify({ value: address, ts: Date.now() }));
+      return address;
+    } else {
+      if (data.error_message) {
+        console.warn("Geocode error:", data.status, data.error_message);
+      } else {
+        console.warn("Geocode no result:", data.status);
+      }
+    }
+  } catch (err) {
+    console.error("Reverse geocoding failed", err);
+  }
+
+  // 4) Fallback to coordinates string
+  const fallback = `📍 ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+  addrMemCache.set(key, fallback);
+  return fallback;
+}
+
+
+  /*
+  const GOOGLE_MAPS_API_KEY = "AIzaSyAGZ4lmkAg-qNxKmSZvZe9VeGG8uEYT_s4";
+
+async function getAddressFromLatLon(lat, lon) {
+  const cacheKey = `addr_${lat.toFixed(6)}_${lon.toFixed(6)}`;
+
+  // Check localStorage first
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (data.status === "OK" && data.results.length > 0) {
+      const address = data.results[0].formatted_address;
+      localStorage.setItem(cacheKey, address);
+      return address;
+    }
+  } catch (err) {
+    console.error("Reverse geocoding failed", err);
+  }
+
+  return `Bay #N/A`; // fallback
+}
+*/
+
+// new version 0815 + Google Maps integration
 function createBayCard(bay) {
   const card = document.createElement('div');
   card.className = 'parking-item';
 
+  // 1) Prefer counts; fall back to text status when counts are absent
   const rawStatus = (bay.status_description || '').toLowerCase();
   const hasCounts =
     typeof bay.availableSpaces === 'number' &&
     typeof bay.totalSpaces === 'number';
 
+  // 2) Determine availability:
   const isAvail = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
 
+  // 3) Build human-readable status text
   let statusText;
   if (hasCounts) {
     const avail = Math.max(0, bay.availableSpaces || 0);
@@ -584,82 +609,39 @@ function createBayCard(bay) {
     statusText = isAvail ? 'Available' : 'Unavailable';
   }
 
+  // 4) Badge color class
   const badgeClass = isAvail ? 'success' : 'danger';
 
+  // 5) Build zone label
   const zoneLabel = bay.name
     ? bay.name
     : (bay.zone_number ? `Zone ${bay.zone_number}` : '—');
 
+  // 6) Google Maps link
   const gm = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
 
-  // Prefer street name, then segment_desc, then bay number
-  const street = bay.street || bay.segment_desc || `Bay #${bay.kerbsideid ?? 'N/A'}`;
+  // 7) Resolve street name or fetch from Google API
+  // 7) Resolve display name: prefer segment description, then street, then reverse‑geocode
+  const streetPromise = bay.segment_description
+    ? Promise.resolve(bay.segment_description)
+    : (bay.street
+      ? Promise.resolve(bay.street)
+      : getAddressFromLatLon(bay.lat, bay.lon));
 
+  // Optional pills
   const meterBadge = bay.metered ? `<span class="pill">Metered</span>` : '';
 
-  card.innerHTML = `
-    <div class="parking-header">
-      <div>
-        <div class="parking-name">${street}</div>
-        <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
-=======
-  // new version 0815
-  function createBayCard(bay) {
-    const card = document.createElement('div');
-    card.className = 'parking-item';
-  
-    // 1) Prefer counts; fall back to text status when counts are absent
-    const rawStatus = (bay.status_description || '').toLowerCase();
-    const hasCounts =
-      typeof bay.availableSpaces === 'number' &&
-      typeof bay.totalSpaces === 'number';
-  
-    // 2) Determine availability:
-    //    - If we have counts: available when availableSpaces > 0
-    //    - Else: fall back to text contains 'unoccupied'
-    const isAvail = hasCounts ? (bay.availableSpaces > 0) : rawStatus.includes('unoccupied');
-  
-    // 3) Build human-readable status text
-    let statusText;
-    if (hasCounts) {
-      const avail = Math.max(0, bay.availableSpaces || 0); // guard negative/undefined
-      const total = Math.max(0, bay.totalSpaces || 0);
-      statusText = isAvail
-        ? `Available (${avail}/${total})`
-        : `Unavailable (0/${total})`;
-    } else {
-      statusText = isAvail ? 'Available' : 'Unavailable';
-    }
-  
-    // 4) Badge color class for the distance chip (green when available, red when not)
-    const badgeClass = isAvail ? 'success' : 'danger';
-  
-    // 5) Build zone label:
-    //    - Use API "name" as-is if present (e.g., "Zone 7546")
-    //    - Else use "Zone <zone_number>" if we have a number
-    //    - Else fallback to "—"
-    const zoneLabel = bay.name
-      ? bay.name
-      : (bay.zone_number ? `Zone ${bay.zone_number}` : '—');
-  
-    // 6) Misc fields
-    const gm = `https://www.google.com/maps/dir/?api=1&destination=${bay.lat},${bay.lon}`;
-    const street = bay.street || `Bay #${bay.kerbsideid ?? 'N/A'}`;
-  
-    // Optional pills
-    const meterBadge = bay.metered ? `<span class="pill">Metered</span>` : '';
-    const maxStayText = bay.max_stay_label || '—';
-  
+  // Build card once address is ready
+  streetPromise.then(streetName => {
     card.innerHTML = `
       <div class="parking-header">
         <div>
-          <div class="parking-name">${street}</div>
+          <div class="parking-name">${streetName}</div>
           <div class="parking-address">📍 ${bay.lat.toFixed(6)}, ${bay.lon.toFixed(6)}</div>
         </div>
         <div class="parking-availability ${badgeClass}">
           ${formatMeters(bay.distance_m)}
         </div>
->>>>>>> c15b5761e5abc6f42ab4c20cd062c32825c2f6d1
       </div>
       <div class="parking-details">
         <div class="parking-info">
@@ -672,13 +654,13 @@ function createBayCard(bay) {
         <a href="${gm}" target="_blank" class="navigate-btn">Open in Maps</a>
       </div>
     `;
-    return card;
-  }
+  });
+
+  return card;
+}
   
 
 
-<<<<<<< HEAD
-=======
   // ----  createBayCard previous version 0815 1254----
   /*
   function createBayCard(bay) {
@@ -721,7 +703,6 @@ function createBayCard(bay) {
 
   */
 
->>>>>>> c15b5761e5abc6f42ab4c20cd062c32825c2f6d1
   function formatMeters(m) {
     if (m == null || isNaN(m)) return '—';
     if (m < 1000) return `${Math.round(m)} m`;
@@ -738,4 +719,3 @@ function createBayCard(bay) {
     }
   }
 }
-</script>
